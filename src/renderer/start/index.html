@@ -1,0 +1,125 @@
+<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="utf-8" />
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:"
+    />
+    <title>Kinopoisk — настройки</title>
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <main class="shell">
+      <header class="brand">
+        <div class="brand__logo" aria-hidden="true">К</div>
+        <div class="brand__text">
+          <div class="brand__title">Kinopoisk для детей</div>
+          <div class="brand__subtitle">Лимит серий на запуск</div>
+        </div>
+      </header>
+
+      <section id="screen-loading" class="screen">
+        <p class="muted">Загрузка…</p>
+      </section>
+
+      <section id="screen-locked" class="screen" hidden>
+        <p class="eyebrow">Готово к просмотру</p>
+        <div class="limit-display">
+          <span id="locked-limit">2</span>
+          <span class="limit-display__unit">серии</span>
+        </div>
+        <p class="muted">
+          Столько серий можно посмотреть за этот запуск приложения. Счётчик
+          обнулится после закрытия.
+        </p>
+        <button id="btn-watch" class="button button_primary" type="button">Смотреть</button>
+        <button id="btn-edit" class="button button_secondary" type="button">
+          Изменить лимит
+        </button>
+        <p class="hint">Изменение лимита защищено PIN-кодом.</p>
+      </section>
+
+      <section id="screen-pin" class="screen" hidden>
+        <p class="eyebrow">Только для взрослых</p>
+        <h1 class="title">Введите PIN</h1>
+        <form id="pin-form" class="form">
+          <input
+            id="pin-input"
+            class="input input_pin"
+            type="password"
+            inputmode="numeric"
+            autocomplete="off"
+            maxlength="8"
+            placeholder="••••"
+          />
+          <p id="pin-error" class="error" hidden></p>
+          <button class="button button_primary" type="submit">Продолжить</button>
+          <button id="pin-back" class="button button_ghost" type="button">Назад</button>
+        </form>
+      </section>
+
+      <section id="screen-form" class="screen" hidden>
+        <p class="eyebrow" id="form-eyebrow">Перед началом</p>
+        <h1 class="title" id="form-title">Сколько серий разрешить?</h1>
+        <p class="muted">Лимит действует до закрытия приложения.</p>
+
+        <form id="settings-form" class="form">
+          <label class="field">
+            <span class="field__label">Количество серий</span>
+            <span class="field__row">
+              <input
+                id="limit-input"
+                class="input"
+                type="number"
+                min="0"
+                max="99"
+                step="1"
+                value="2"
+              />
+              <span class="field__suffix">0 — без ограничений</span>
+            </span>
+          </label>
+
+          <label class="field">
+            <span class="field__label">Что открыть при запуске</span>
+            <input id="url-input" class="input" type="url" spellcheck="false" />
+          </label>
+
+          <label class="field">
+            <span class="field__label" id="pin-label">PIN для родителей (необязательно)</span>
+            <input
+              id="pin-field"
+              class="input"
+              type="password"
+              inputmode="numeric"
+              autocomplete="new-password"
+              maxlength="8"
+              placeholder="4–8 цифр"
+            />
+          </label>
+
+          <p id="form-error" class="error" hidden></p>
+          <button id="submit-button" class="button button_primary" type="submit">
+            Начать просмотр
+          </button>
+        </form>
+
+        <div class="account">
+          <div class="account__status" id="auth-status">Аккаунт: проверяется…</div>
+          <div class="account__hint">
+            Вход выполняется один раз в окне Кинопоиска и запоминается между запусками.
+          </div>
+          <button id="btn-logout" class="link" type="button">Выйти из аккаунта</button>
+        </div>
+      </section>
+
+      <footer class="footer">
+        <span>Kinopoisk for child</span>
+        <span id="version">v0.1.0</span>
+      </footer>
+    </main>
+
+    <script src="./start.js"></script>
+  </body>
+</html>

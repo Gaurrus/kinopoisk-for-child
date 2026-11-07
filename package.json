@@ -1,0 +1,56 @@
+{
+  "name": "kinopoisk-for-child",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Kinopoisk HD for kids: persistent login and a per-launch episode limit",
+  "main": "dist/main/main.js",
+  "author": "Gaurrus",
+  "license": "MIT",
+  "scripts": {
+    "clean": "node scripts/clean.mjs",
+    "build": "yarn clean && tsc -p tsconfig.json && node scripts/copy-assets.mjs",
+    "start": "yarn build && electron .",
+    "dev": "yarn build && electron . --dev",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "yarn build && node --test tests/*.test.mjs",
+    "dist:win": "yarn build && electron-builder --win --x64",
+    "postinstall": "node node_modules/electron/install.js"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.2",
+    "electron": "https://github.com/castlabs/electron-releases#v44.10.1+wvcus",
+    "electron-builder": "^26.18.0",
+    "typescript": "^5.7.2"
+  },
+  "build": {
+    "appId": "ru.gaurrus.kinopoisk-child",
+    "productName": "Kinopoisk for child",
+    "directories": {
+      "output": "dist-app"
+    },
+    "files": [
+      "dist/**/*",
+      "package.json"
+    ],
+    "electronDist": "node_modules/electron/dist",
+    "npmRebuild": false,
+    "asar": true,
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "artifactName": "kinopoisk-for-child-${version}-setup.${ext}"
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": true,
+      "deleteAppDataOnUninstall": false
+    }
+  }
+}
