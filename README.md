@@ -72,6 +72,23 @@ VMP/EVS для основного режима **не нужны**.
 > Собирать Windows-установщик нужно на Windows: `electronDist` указывает на
 > скачанный под текущую платформу бинарник castLabs.
 
+## Сборка для macOS
+
+```bash
+yarn install
+yarn dist:mac
+```
+
+Готовое приложение: `dist-app/mac-arm64/Kinopoisk for child.app` (на Intel —
+`dist-app/mac/Kinopoisk for child.app`). Установка:
+
+```bash
+ditto "dist-app/mac-arm64/Kinopoisk for child.app" "/Applications/Kinopoisk for child.app"
+```
+
+Приложение не подписано — при первом запуске macOS может попросить подтвердить
+открытие. Для плеера нужен установленный Google Chrome (или Edge).
+
 ## Переменные окружения
 
 - `KP_BROWSER_PATH` — явный путь к `chrome.exe`/`msedge.exe`.

@@ -19,7 +19,8 @@
     "postinstall": "node node_modules/electron/install.js",
     "evs:sign": "node scripts/evs-sign.mjs",
     "evs:sign:dev": "node scripts/evs-sign.mjs --target dev",
-    "evs:sign:packaged": "node scripts/evs-sign.mjs --target packaged"
+    "evs:sign:packaged": "node scripts/evs-sign.mjs --target packaged",
+    "dist:mac": "yarn build && electron-builder --mac --dir"
   },
   "devDependencies": {
     "@types/chrome-remote-interface": "^0.34.1",
@@ -59,7 +60,11 @@
       "allowToChangeInstallationDirectory": true,
       "deleteAppDataOnUninstall": false
     },
-    "afterPack": "scripts/evs-after-pack.js"
+    "afterPack": "scripts/evs-after-pack.js",
+    "mac": {
+      "identity": null,
+      "category": "public.app-category.entertainment"
+    }
   },
   "dependencies": {
     "chrome-remote-interface": "^0.34.0"
