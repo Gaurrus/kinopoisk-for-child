@@ -12,14 +12,6 @@ export interface BrowserCandidate {
 
 const KINOPOISK_URL_RE = /^https:\/\/([a-z0-9-]+\.)*kinopoisk\.ru\//i;
 
-const ANTI_DETECTION_SOURCE = `
-try {
-  Object.defineProperty(Navigator.prototype, 'webdriver', {
-    get: () => false,
-    configurable: true,
-  });
-} catch (e) {}
-`;
 
 function exists(file: string): boolean {
   try {
@@ -140,6 +132,9 @@ export class BrowserGuardSession {
     }
 
     fs.mkdirSync(this.options.profileDir, { recursive: true });
+    this.killStaleBrowser();
+    await delay(400);
+
     const portFile = path.join(this.options.profileDir, 'DevToolsActivePort');
     try {
       fs.unlinkSync(portFile);
@@ -147,27 +142,45 @@ export class BrowserGuardSession {
       /* no stale port */
     }
 
-    this.child = spawn(
-      browser.path,
-      [
-        `--user-data-dir=${this.options.profileDir}`,
+    const useCdp = process.env.KP_NO_CDP !== '1';
+    const args = [
+      `--user-data-dir=${this.options.profileDir}`,
+      '--no-first-run',
+      '--no-default-browser-check',
+      '--disable-blink-features=AutomationControlled',
+      '--lang=ru',
+    ];
+
+    if (useCdp) {
+      args.push(
         '--remote-debugging-port=0',
         `--app=${this.options.startUrl}`,
-        '--no-first-run',
-        '--no-default-browser-check',
-        '--disable-blink-features=AutomationControlled',
         '--disable-background-mode',
         '--disable-session-crashed-bubble',
         '--hide-crash-restore-bubble',
         '--window-size=1280,800',
-        '--lang=ru',
-      ],
-      { stdio: 'ignore' },
-    );
+      );
+    } else {
+      args.push('--new-window', this.options.startUrl);
+    }
 
+    this.child = spawn(browser.path, args, { stdio: 'ignore' });
     this.child.on('exit', () => {
       if (!this.stopping) this.handleExit();
     });
+    if (this.child.pid) {
+      try {
+        fs.writeFileSync(this.pidFile(), String(this.child.pid), 'utf8');
+      } catch {
+        /* ignore */
+      }
+    }
+
+    if (!useCdp) {
+      this.active = true;
+      this.sawPage = true;
+      return;
+    }
 
     this.port = await this.waitForPort(portFile, 25_000);
     this.active = true;
@@ -176,6 +189,45 @@ export class BrowserGuardSession {
     this.pollTimer = setInterval(() => {
       void this.pollTargets();
     }, 700);
+  }
+
+  private pidFile(): string {
+    return path.join(this.options.profileDir, 'browser.pid');
+  }
+
+  private killStaleBrowser(): void {
+    const file = this.pidFile();
+    let pid = 0;
+    try {
+      pid = Number.parseInt(fs.readFileSync(file, 'utf8').trim(), 10);
+    } catch {
+      pid = 0;
+    }
+    if (Number.isInteger(pid) && pid > 0) {
+      try {
+        process.kill(pid, 0);
+        if (process.platform === 'win32') {
+          spawn('taskkill', ['/pid', String(pid), '/T', '/F'], { stdio: 'ignore' });
+        } else {
+          process.kill(pid, 'SIGTERM');
+          setTimeout(() => {
+            try {
+              process.kill(pid, 'SIGKILL');
+            } catch {
+              /* already gone */
+            }
+          }, 1200);
+        }
+        console.log('[browser] stopped stale browser process', pid);
+      } catch {
+        /* not running */
+      }
+    }
+    try {
+      fs.unlinkSync(file);
+    } catch {
+      /* no pid file */
+    }
   }
 
   private async waitForPort(portFile: string, timeoutMs: number): Promise<number> {
@@ -247,12 +299,8 @@ export class BrowserGuardSession {
       ]);
       await client.Runtime.addBinding({ name: '__kpAttempt' });
       await client.Page.addScriptToEvaluateOnNewDocument({
-        source: ANTI_DETECTION_SOURCE,
-      });
-      await client.Page.addScriptToEvaluateOnNewDocument({
         source: this.options.guardSource,
       });
-      await client.Runtime.evaluate({ expression: ANTI_DETECTION_SOURCE });
     } catch {
       return;
     }
@@ -413,6 +461,12 @@ export class BrowserGuardSession {
       }
     }
     this.clients.clear();
+
+    try {
+      fs.unlinkSync(this.pidFile());
+    } catch {
+      /* no pid file */
+    }
 
     const child = this.child;
     this.child = null;

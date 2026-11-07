@@ -77,6 +77,8 @@ VMP/EVS для основного режима **не нужны**.
 ## Переменные окружения
 
 - `KP_BROWSER_PATH` — явный путь к `chrome.exe`/`msedge.exe`.
+- `KP_NO_CDP=1` — режим входа: открывает обычное окно Chrome без remote debugging
+  и без лимита. Нужен, если Google не пускает в управляемое окно.
 - `KP_PLAYER=electron` — принудительно использовать встроенный Electron-плеер
   (fallback).
 - `EVS_ACCOUNT_NAME` / `EVS_PASSWD` / `EVS_SIGN=1` / `EVS_REQUIRED=1` — только
@@ -106,6 +108,22 @@ py -3 -m castlabs_evs.vmp verify-pkg dist-app/win-unpacked
 `drm.log` в `%APPDATA%\Kinopoisk for child\` относится к встроенному
 Electron-fallback. В основном режиме DRM обслуживает Chrome/Edge, и лог не нужен.
 Кнопка «Открыть папку с логами» есть в окне настроек.
+
+## Если Google пишет «браузер не безопасен»
+
+1. Закрой все окна приложения и Chrome с профилем приложения.
+2. Запусти режим входа (обычное окно, без CDP):
+   ```powershell
+   $env:KP_NO_CDP="1"; yarn dev
+   ```
+3. Войди в Kinopoisk через Google и закрой окно.
+4. Запусти приложение обычным способом — профиль уже авторизован:
+   ```powershell
+   Remove-Item Env:KP_NO_CDP
+   yarn dev
+   ```
+
+Сессия хранится в общем профиле, поэтому повторять вход не нужно.
 
 ## Известные ограничения
 
