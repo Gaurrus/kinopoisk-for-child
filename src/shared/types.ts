@@ -20,6 +20,7 @@ export interface SettingsState extends LimiterSnapshot {
   unlocked: boolean;
   auth: AuthStatus;
   logPath: string;
+  player: 'browser' | 'electron';
 }
 
 export interface SavePayload {

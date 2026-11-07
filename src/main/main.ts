@@ -1,5 +1,6 @@
 import { app, BrowserWindow, Menu, dialog, ipcMain, session, shell } from 'electron';
 import * as electron from 'electron';
+import fs from 'node:fs';
 import path from 'node:path';
 import { CHANNELS } from '../shared/channels';
 import type {
@@ -9,6 +10,7 @@ import type {
   SettingsState,
   SettingsWindowMode,
 } from '../shared/types';
+import { BrowserGuardSession, findBrowser } from './browser-session';
 import { initDrmLog, installDrmLogging, logDrm } from './diagnostics';
 import { EpisodeLimiter, normalizeLimit } from './limiter';
 import {
@@ -33,13 +35,21 @@ let settingsWindowMode: SettingsWindowMode = 'start';
 let settingsUnlocked = false;
 let pinFailures = 0;
 let limiter: EpisodeLimiter | null = null;
+let browserSession: BrowserGuardSession | null = null;
 let settings: Settings;
-let widevineReady: Promise<void> = Promise.resolve();
+let widevineReady: Promise<void> | null = null;
 
 // Do NOT spoof the user agent: Kinopoisk's Widevine license server rejects
 // playback when the Chromium UA does not match the actual DRM client.
 app.setName('Kinopoisk for child');
 app.setAppUserModelId('ru.gaurrus.kinopoisk-child');
+
+function ensureWidevineOnce(): Promise<void> {
+  if (!widevineReady) {
+    widevineReady = ensureWidevine();
+  }
+  return widevineReady;
+}
 
 async function ensureWidevine(): Promise<void> {
   const components = (electron as unknown as { components?: EcsComponents }).components;
@@ -83,6 +93,9 @@ function openExternal(raw: string): void {
 }
 
 async function getAuthStatus(): Promise<AuthStatus> {
+  if (browserSession?.isActive()) {
+    return browserSession.getAuth();
+  }
   try {
     const ses = session.fromPartition(PARTITION);
     const [kinopoiskCookies, yandexCookies] = await Promise.all([
@@ -122,6 +135,7 @@ async function getSettingsState(): Promise<SettingsState> {
     unlocked: settingsUnlocked,
     auth: await getAuthStatus(),
     logPath: path.join(app.getPath('userData'), 'drm.log'),
+    player: process.env.KP_PLAYER === 'electron' || !findBrowser() ? 'electron' : 'browser',
     ...snapshot,
   };
 }
@@ -129,6 +143,7 @@ async function getSettingsState(): Promise<SettingsState> {
 function broadcastState(): void {
   if (!limiter) return;
   const snapshot = limiter.snapshot();
+  browserSession?.broadcast();
   for (const window of BrowserWindow.getAllWindows()) {
     if (!window.isDestroyed()) {
       window.webContents.send(CHANNELS.guardState, snapshot);
@@ -268,14 +283,62 @@ function createMainWindow(): BrowserWindow {
   return window;
 }
 
+async function startInSystemBrowser(
+  startUrl: string,
+  activeLimiter: EpisodeLimiter,
+): Promise<boolean> {
+  if (!findBrowser()) return false;
+
+  const guardPath = path.join(__dirname, '../browser/guard.js');
+  if (!fs.existsSync(guardPath)) {
+    console.warn('[browser] guard bundle is missing, falling back to Electron');
+    return false;
+  }
+
+  try {
+    browserSession = new BrowserGuardSession({
+      profileDir: path.join(app.getPath('userData'), 'browser-profile'),
+      startUrl,
+      guardSource: fs.readFileSync(guardPath, 'utf8'),
+      limiter: activeLimiter,
+      onOpenSettings: () => openSettingsWindow('edit'),
+      onExit: () => {
+        browserSession = null;
+        app.quit();
+      },
+      onSnapshotChanged: () => broadcastState(),
+      onAuthChanged: () => undefined,
+    });
+    await browserSession.start();
+    return true;
+  } catch (error) {
+    console.error('[browser] failed to start', error);
+    browserSession = null;
+    dialog.showErrorBox(
+      'Не удалось запустить Chrome/Edge',
+      `${error instanceof Error ? error.message : String(error)}\n\n` +
+        'Приложение откроет встроенный плеер. DRM в нём может не работать.',
+    );
+    return false;
+  }
+}
+
 async function startSession(limit: number, startUrl: string): Promise<void> {
   settings.episodeLimit = normalizeLimit(limit);
   settings.startUrl = isValidStartUrl(startUrl) ? startUrl.trim() : settings.startUrl;
   saveSettings(app.getPath('userData'), settings);
 
-  limiter = new EpisodeLimiter(settings.episodeLimit);
+  const activeLimiter = new EpisodeLimiter(settings.episodeLimit);
+  limiter = activeLimiter;
 
-  await widevineReady;
+  const useBrowser = process.env.KP_PLAYER !== 'electron';
+  if (useBrowser && (await startInSystemBrowser(settings.startUrl, activeLimiter))) {
+    closeSettingsWindow();
+    broadcastState();
+    return;
+  }
+
+  await ensureWidevineOnce();
 
   if (!mainWindow) {
     mainWindow = createMainWindow();
@@ -360,6 +423,10 @@ function registerIpc(): void {
 
   ipcMain.handle(CHANNELS.sessionLogout, async (): Promise<ActionResult> => {
     try {
+      if (browserSession?.isActive()) {
+        await browserSession.clearSession();
+        return { ok: true };
+      }
       await session.fromPartition(PARTITION).clearStorageData();
       if (mainWindow && !mainWindow.isDestroyed()) {
         mainWindow.reload();
@@ -406,7 +473,6 @@ async function bootstrap(): Promise<void> {
   registerIpc();
   installDrmLogging(session.fromPartition(PARTITION));
   openSettingsWindow('start');
-  widevineReady = ensureWidevine();
 }
 
 const gotLock = app.requestSingleInstanceLock();
@@ -415,6 +481,10 @@ if (!gotLock) {
   app.quit();
 } else {
   app.on('second-instance', () => {
+    if (browserSession?.isActive()) {
+      openSettingsWindow('edit');
+      return;
+    }
     if (!mainWindow || mainWindow.isDestroyed()) {
       openSettingsWindow('start');
       return;
@@ -425,7 +495,15 @@ if (!gotLock) {
   });
 
   app.on('window-all-closed', () => {
+    if (browserSession?.isActive()) return;
     app.quit();
+  });
+
+  app.on('before-quit', () => {
+    if (browserSession) {
+      void browserSession.stop();
+      browserSession = null;
+    }
   });
 
   let googleRejectNoticeShown = false;

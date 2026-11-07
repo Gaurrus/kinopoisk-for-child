@@ -70,6 +70,10 @@
       const login = current.auth.login ? ` (${current.auth.login})` : '';
       authStatus.textContent = `Аккаунт: вход выполнен${login}`;
       authStatus.style.color = '#7fe0a8';
+    } else if (current.player === 'browser') {
+      authStatus.textContent =
+        'Аккаунт: вход выполняется в окне браузера (Chrome/Edge) и запоминается';
+      authStatus.style.color = '';
     } else {
       authStatus.textContent = 'Аккаунт: вход не выполнен — войдите в окне Кинопоиска';
       authStatus.style.color = '';

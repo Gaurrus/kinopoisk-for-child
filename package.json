@@ -8,7 +8,7 @@
   "license": "MIT",
   "scripts": {
     "clean": "node scripts/clean.mjs",
-    "build": "yarn clean && tsc -p tsconfig.json && node scripts/copy-assets.mjs",
+    "build": "yarn clean && tsc -p tsconfig.json && esbuild src/browser/guard.ts --bundle --format=iife --target=chrome120 --outfile=dist/browser/guard.js && node scripts/copy-assets.mjs",
     "start": "yarn build && electron .",
     "dev": "yarn build && electron . --dev",
     "run": "electron .",
@@ -22,9 +22,11 @@
     "evs:sign:packaged": "node scripts/evs-sign.mjs --target packaged"
   },
   "devDependencies": {
+    "@types/chrome-remote-interface": "^0.34.1",
     "@types/node": "^22.10.2",
     "electron": "https://github.com/castlabs/electron-releases#v44.10.1+wvcus",
     "electron-builder": "^26.18.0",
+    "esbuild": "^0.28.2",
     "typescript": "^5.7.2"
   },
   "build": {
@@ -58,5 +60,8 @@
       "deleteAppDataOnUninstall": false
     },
     "afterPack": "scripts/evs-after-pack.js"
+  },
+  "dependencies": {
+    "chrome-remote-interface": "^0.34.0"
   }
 }

@@ -14,6 +14,7 @@ interface KpSettingsState {
   remaining: number | null;
   auth: KpAuthStatus;
   logPath: string;
+  player: 'browser' | 'electron';
 }
 
 interface KpSavePayload {

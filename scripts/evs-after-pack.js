@@ -40,14 +40,8 @@ module.exports = async function afterPack(context) {
     process.env.EVS_ACCOUNT_NAME && process.env.EVS_PASSWD,
   );
   if (!hasCredentials && process.env.EVS_SIGN !== '1') {
-    console.warn(
-      [
-        '[evs] VMP-подпись пропущена: нет EVS_ACCOUNT_NAME/EVS_PASSWD.',
-        'Без production VMP-подписи Kinopoisk покажет «Устройство не поддерживается».',
-        INSTALL_HINT,
-        'Регистрация (бесплатно): py -3 -m castlabs_evs.account signup',
-        'Затем: $env:EVS_ACCOUNT_NAME="..."; $env:EVS_PASSWD="..."; yarn dist:win',
-      ].join('\n'),
+    console.log(
+      '[evs] VMP-подпись не запрошена (для режима системного браузера не нужна)',
     );
     return;
   }
