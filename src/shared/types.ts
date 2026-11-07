@@ -19,6 +19,7 @@ export interface SettingsState extends LimiterSnapshot {
   hasPin: boolean;
   unlocked: boolean;
   auth: AuthStatus;
+  logPath: string;
 }
 
 export interface SavePayload {

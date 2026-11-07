@@ -21,18 +21,22 @@ Desktop-приложение на Chromium (Electron) для Windows: откры
 
 - Node.js 22+
 - Yarn 1.22 (`npm i -g yarn`)
+- Python 3.7+ — только для VMP-подписи (Widevine) на Windows
 - Windows 10/11 x64 — для запуска и сборки установщика
 
 ## Разработка
 
 ```bash
 yarn install
-yarn dev        # сборка + запуск с DevTools
-yarn test       # юнит-тесты парсинга серий и лимитера
+yarn evs:sign:dev   # VMP-подпись бинарника Electron (один раз, см. ниже)
+yarn dev            # сборка + запуск с DevTools
+yarn test           # юнит-тесты парсинга серий и лимитера
 yarn typecheck
 ```
 
-`yarn dev` собирает TypeScript в `dist/` и запускает Electron.
+`yarn dev` собирает TypeScript в `dist/` и запускает Electron. VMP-подпись нужно
+повторять после каждого `yarn install`, потому что npm заново распаковывает
+бинарник Electron.
 
 ## Сборка установщика для Windows
 
@@ -40,13 +44,52 @@ yarn typecheck
 
 ```bash
 yarn install
+$env:EVS_ACCOUNT_NAME="you@example.com"
+$env:EVS_PASSWD="<пароль EVS>"
 yarn dist:win
 ```
 
 Готовый установщик появится в `dist-app/kinopoisk-for-child-0.1.0-setup.exe`.
+Хук `afterPack` сам VMP-подпишет `dist-app/win-unpacked` перед сборкой NSIS,
+если заданы `EVS_ACCOUNT_NAME`/`EVS_PASSWD`. Проверить подпись можно так:
+
+```bash
+py -3 -m castlabs_evs.vmp verify-pkg dist-app/win-unpacked
+```
 
 > Собирать Windows-установщик нужно на Windows: `electronDist` указывает на
 > скачанный под текущую платформу бинарник castLabs.
+
+## Widevine и VMP-подпись (обязательно для Windows)
+
+Kinopoisk отдаёт DRM-лицензию только клиенту с **production VMP-подписью**.
+castLabs-сборка поставляется с development-подписью, поэтому без шагов ниже
+плеер показывает «Воспроизведение видео невозможно. Устройство не поддерживается».
+
+1. Установить клиент EVS (сервис бесплатный):
+
+   ```bash
+   py -3 -m pip install --upgrade castlabs-evs
+   ```
+
+2. Создать аккаунт и подтвердить email (один раз):
+
+   ```bash
+   py -3 -m castlabs_evs.account signup
+   ```
+
+3. Подписать бинарник для разработки:
+
+   ```bash
+   yarn evs:sign:dev
+   ```
+
+4. Для сборки задать `EVS_ACCOUNT_NAME`/`EVS_PASSWD` (см. выше) либо запустить
+   `yarn evs:sign:packaged` после `electron-builder --dir`.
+
+Если EVS недоступен и `EVS_REQUIRED=1` не задан, сборка продолжится без подписи
+с предупреждением. Для CI стоит выставлять `EVS_REQUIRED=1`, чтобы не выпустить
+нерабочий установщик.
 
 ## Как работает лимит
 
@@ -66,10 +109,14 @@ yarn dist:win
 
 ## Известные ограничения
 
-- **Widevine/VMP.** Для production-воспроизведения на Windows castLabs требует
-  VMP-подпись приложения через сервис EVS (аккаунт castLabs). Без неё DRM может
-  не запуститься на некоторых сборках. См. вики castLabs.
+- **Widevine/VMP.** Нужна production VMP-подпись через EVS — см. раздел выше.
+  Без неё Kinopoisk показывает «Устройство не поддерживается».
 - Kinopoisk может показывать капчу при входе — она открывается в том же окне.
+- **Вход через Google.** Google блокирует OAuth во встроенных браузерах, но
+  оригинальный User-Agent Electron он принимает. Мы намеренно **не подменяем UA**:
+  подмена ломает выдачу DRM-лицензии. Если Google всё же откажет, войдите в
+  Яндекс ID по логину и паролю; пароль для аккаунта, созданного через Google,
+  задаётся на `id.yandex.ru`.
 - Приложение не обходит подписку и DRM: это просто обёртка над сайтом.
 - PIN хранится в `settings.json` в открытом виде (userData). Это защита от
   ребёнка, а не от взрослого с доступом к файлам.

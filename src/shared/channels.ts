@@ -5,6 +5,7 @@ export const CHANNELS = {
   settingsVerifyPin: 'settings:verifyPin',
   settingsClose: 'settings:close',
   sessionLogout: 'session:logout',
+  openLogs: 'diagnostics:openLogs',
   guardReady: 'guard:ready',
   guardAttempt: 'guard:attempt',
   guardQuit: 'guard:quit',

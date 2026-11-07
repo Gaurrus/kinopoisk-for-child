@@ -11,6 +11,7 @@ contextBridge.exposeInMainWorld('kp', {
     ipcRenderer.invoke(CHANNELS.settingsVerifyPin, pin),
   logout: (): Promise<ActionResult> => ipcRenderer.invoke(CHANNELS.sessionLogout),
   close: (): Promise<void> => ipcRenderer.invoke(CHANNELS.settingsClose),
+  openLogs: (): Promise<ActionResult> => ipcRenderer.invoke(CHANNELS.openLogs),
   onState: (callback: (state: unknown) => void): void => {
     ipcRenderer.on(CHANNELS.guardState, (_event, snapshot: unknown) => callback(snapshot));
   },

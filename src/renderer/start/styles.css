@@ -35,9 +35,9 @@ body {
 .shell {
   display: flex;
   flex-direction: column;
-  gap: 18px;
+  gap: 16px;
   min-height: 100vh;
-  padding: 24px 28px 16px;
+  padding: 20px 26px 12px;
 }
 
 .brand {
@@ -133,7 +133,7 @@ body {
 .form {
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 10px;
   margin-top: 2px;
 }
 
@@ -163,7 +163,7 @@ body {
 
 .input {
   width: 100%;
-  padding: 11px 13px;
+  padding: 10px 12px;
   border: 1px solid var(--border);
   border-radius: 11px;
   outline: none;
@@ -253,7 +253,8 @@ body {
   flex-direction: column;
   gap: 4px;
   margin-top: auto;
-  padding: 12px 14px;
+  gap: 3px;
+  padding: 10px 12px;
   border: 1px solid var(--border);
   border-radius: 14px;
   background: rgba(21, 26, 35, 0.6);
@@ -283,6 +284,12 @@ body {
 
 .link:hover {
   text-decoration: underline;
+}
+
+.log-path {
+  word-break: break-all;
+  color: #4d566b;
+  font-size: 10.5px;
 }
 
 .footer {

@@ -13,6 +13,7 @@ interface KpSettingsState {
   used: number;
   remaining: number | null;
   auth: KpAuthStatus;
+  logPath: string;
 }
 
 interface KpSavePayload {
@@ -34,6 +35,7 @@ interface KpApi {
   verifyPin(pin: string): Promise<KpResult>;
   logout(): Promise<KpResult>;
   close(): Promise<void>;
+  openLogs(): Promise<KpResult>;
   onState(callback: (state: unknown) => void): void;
 }
 

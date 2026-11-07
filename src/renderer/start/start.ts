@@ -33,6 +33,8 @@
 
   const authStatus = byId<HTMLElement>('auth-status');
   const btnLogout = byId<HTMLButtonElement>('btn-logout');
+  const btnOpenLogs = byId<HTMLButtonElement>('btn-open-logs');
+  const logPath = byId<HTMLElement>('log-path');
   const version = byId<HTMLElement>('version');
 
   let state: KpSettingsState | null = null;
@@ -78,6 +80,7 @@
     if (!state) return;
 
     lockedLimit.textContent = String(state.episodeLimit);
+    logPath.textContent = state.logPath;
     renderAuth(state);
 
     if (state.mode === 'start' && state.hasPin && !forceForm) {
@@ -194,6 +197,13 @@
       }
     } finally {
       submitButton.disabled = false;
+    }
+  });
+
+  btnOpenLogs.addEventListener('click', async () => {
+    const result = await window.kp.openLogs();
+    if (!result.ok) {
+      setError(formError, result.error ?? 'Не удалось открыть папку с логами');
     }
   });
 

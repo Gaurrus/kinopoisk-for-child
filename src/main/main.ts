@@ -1,4 +1,4 @@
-import { app, BrowserWindow, Menu, ipcMain, session, shell } from 'electron';
+import { app, BrowserWindow, Menu, dialog, ipcMain, session, shell } from 'electron';
 import * as electron from 'electron';
 import path from 'node:path';
 import { CHANNELS } from '../shared/channels';
@@ -9,6 +9,7 @@ import type {
   SettingsState,
   SettingsWindowMode,
 } from '../shared/types';
+import { initDrmLog, installDrmLogging, logDrm } from './diagnostics';
 import { EpisodeLimiter, normalizeLimit } from './limiter';
 import {
   isValidPin,
@@ -20,13 +21,6 @@ import {
 
 const isDev = process.argv.includes('--dev');
 const PARTITION = 'persist:kinopoisk';
-const INTERNAL_HOSTS = [
-  'kinopoisk.ru',
-  'yandex.ru',
-  'yandex.net',
-  'yandexcloud.net',
-  'yastatic.net',
-];
 
 interface EcsComponents {
   whenReady: () => Promise<void>;
@@ -42,14 +36,10 @@ let limiter: EpisodeLimiter | null = null;
 let settings: Settings;
 let widevineReady: Promise<void> = Promise.resolve();
 
-function buildUserAgent(): string {
-  const chrome = process.versions.chrome ?? '140.0.0.0';
-  return `Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/${chrome} Safari/537.36`;
-}
-
+// Do NOT spoof the user agent: Kinopoisk's Widevine license server rejects
+// playback when the Chromium UA does not match the actual DRM client.
 app.setName('Kinopoisk for child');
 app.setAppUserModelId('ru.gaurrus.kinopoisk-child');
-app.userAgentFallback = buildUserAgent();
 
 async function ensureWidevine(): Promise<void> {
   const components = (electron as unknown as { components?: EcsComponents }).components;
@@ -62,19 +52,23 @@ async function ensureWidevine(): Promise<void> {
       components.whenReady(),
       new Promise<void>((resolve) => setTimeout(resolve, 20_000)),
     ]);
-    console.log('[widevine] ready', components.status());
+    const status = components.status();
+    console.log('[widevine] ready', status);
+    logDrm(`[widevine] ready ${JSON.stringify(status)}`);
   } catch (error) {
     console.error('[widevine] initialization failed', error);
+    logDrm(`[widevine] failed ${error instanceof Error ? error.message : String(error)}`);
   }
 }
 
-function isInternalUrl(raw: string): boolean {
+function isAllowedInApp(raw: string): boolean {
   try {
     const url = new URL(raw);
-    if (url.protocol === 'about:' || url.protocol === 'devtools:') return true;
-    if (url.protocol !== 'https:' && url.protocol !== 'http:') return false;
-    return INTERNAL_HOSTS.some(
-      (host) => url.hostname === host || url.hostname.endsWith(`.${host}`),
+    return (
+      url.protocol === 'about:' ||
+      url.protocol === 'devtools:' ||
+      url.protocol === 'https:' ||
+      url.protocol === 'http:'
     );
   } catch {
     return false;
@@ -127,6 +121,7 @@ async function getSettingsState(): Promise<SettingsState> {
     hasPin: settings.pin.length > 0,
     unlocked: settingsUnlocked,
     auth: await getAuthStatus(),
+    logPath: path.join(app.getPath('userData'), 'drm.log'),
     ...snapshot,
   };
 }
@@ -160,7 +155,7 @@ function openSettingsWindow(mode: SettingsWindowMode): void {
 
   settingsWindow = new BrowserWindow({
     width: 560,
-    height: mode === 'start' ? 700 : 640,
+    height: mode === 'start' ? 720 : 660,
     resizable: false,
     maximizable: false,
     fullscreenable: false,
@@ -188,22 +183,26 @@ function openSettingsWindow(mode: SettingsWindowMode): void {
   });
 }
 
+/**
+ * Keep the whole login flow inside the app: Google/Yandex redirects after
+ * authorization must not jump to the system browser. Only non-web schemes are
+ * blocked.
+ */
 function hardenWebContents(window: BrowserWindow): void {
   window.webContents.setWindowOpenHandler(({ url }) => {
-    if (isInternalUrl(url)) {
+    if (isAllowedInApp(url)) {
       return {
         action: 'allow',
         overrideBrowserWindowOptions: { autoHideMenuBar: true },
       };
     }
-    openExternal(url);
     return { action: 'deny' };
   });
 
   window.webContents.on('will-navigate', (event, url) => {
-    if (isInternalUrl(url)) return;
-    event.preventDefault();
-    openExternal(url);
+    if (!isAllowedInApp(url)) {
+      event.preventDefault();
+    }
   });
 
   window.webContents.on('will-attach-webview', (event) => {
@@ -354,6 +353,11 @@ function registerIpc(): void {
     closeSettingsWindow();
   });
 
+  ipcMain.handle(CHANNELS.openLogs, async (): Promise<ActionResult> => {
+    const error = await shell.openPath(app.getPath('userData'));
+    return error ? { ok: false, error } : { ok: true };
+  });
+
   ipcMain.handle(CHANNELS.sessionLogout, async (): Promise<ActionResult> => {
     try {
       await session.fromPartition(PARTITION).clearStorageData();
@@ -396,8 +400,11 @@ function registerIpc(): void {
 
 async function bootstrap(): Promise<void> {
   settings = loadSettings(app.getPath('userData'));
+  initDrmLog(app.getPath('userData'));
+  logDrm(`[app] userAgent=${app.userAgentFallback}`);
   Menu.setApplicationMenu(null);
   registerIpc();
+  installDrmLogging(session.fromPartition(PARTITION));
   openSettingsWindow('start');
   widevineReady = ensureWidevine();
 }
@@ -419,6 +426,33 @@ if (!gotLock) {
 
   app.on('window-all-closed', () => {
     app.quit();
+  });
+
+  let googleRejectNoticeShown = false;
+  app.on('web-contents-created', (_event, contents) => {
+    contents.on('did-navigate', (_navigateEvent, url) => {
+      if (googleRejectNoticeShown) return;
+      if (!/^https:\/\/accounts\.google\.com\//i.test(url)) return;
+      if (!/signin\/rejected|deniedsigninrejected/i.test(url)) return;
+      googleRejectNoticeShown = true;
+      void dialog
+        .showMessageBox({
+          type: 'warning',
+          title: 'Google блокирует вход',
+          message: 'Google не разрешает вход из встроенного браузера',
+          detail:
+            'Войдите в Яндекс ID по логину и паролю — этот способ работает всегда. ' +
+            'Если аккаунт создан через Google, пароль можно задать на id.yandex.ru.',
+          buttons: ['Понятно', 'Открыть id.yandex.ru'],
+          defaultId: 0,
+          cancelId: 0,
+        })
+        .then((result) => {
+          if (result.response === 1) {
+            openExternal('https://id.yandex.ru/security');
+          }
+        });
+    });
   });
 
   void app.whenReady().then(bootstrap).catch((error: unknown) => {

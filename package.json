@@ -11,10 +11,15 @@
     "build": "yarn clean && tsc -p tsconfig.json && node scripts/copy-assets.mjs",
     "start": "yarn build && electron .",
     "dev": "yarn build && electron . --dev",
+    "run": "electron .",
+    "run:dev": "electron . --dev",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "yarn build && node --test tests/*.test.mjs",
     "dist:win": "yarn build && electron-builder --win --x64",
-    "postinstall": "node node_modules/electron/install.js"
+    "postinstall": "node node_modules/electron/install.js",
+    "evs:sign": "node scripts/evs-sign.mjs",
+    "evs:sign:dev": "node scripts/evs-sign.mjs --target dev",
+    "evs:sign:packaged": "node scripts/evs-sign.mjs --target packaged"
   },
   "devDependencies": {
     "@types/node": "^22.10.2",
@@ -51,6 +56,7 @@
       "perMachine": false,
       "allowToChangeInstallationDirectory": true,
       "deleteAppDataOnUninstall": false
-    }
+    },
+    "afterPack": "scripts/evs-after-pack.js"
   }
 }
