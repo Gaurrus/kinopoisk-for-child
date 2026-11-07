@@ -12,6 +12,15 @@ export interface BrowserCandidate {
 
 const KINOPOISK_URL_RE = /^https:\/\/([a-z0-9-]+\.)*kinopoisk\.ru\//i;
 
+const ANTI_DETECTION_SOURCE = `
+try {
+  Object.defineProperty(Navigator.prototype, 'webdriver', {
+    get: () => false,
+    configurable: true,
+  });
+} catch (e) {}
+`;
+
 function exists(file: string): boolean {
   try {
     return fs.statSync(file).isFile();
@@ -146,6 +155,7 @@ export class BrowserGuardSession {
         `--app=${this.options.startUrl}`,
         '--no-first-run',
         '--no-default-browser-check',
+        '--disable-blink-features=AutomationControlled',
         '--disable-background-mode',
         '--disable-session-crashed-bubble',
         '--hide-crash-restore-bubble',
@@ -237,8 +247,12 @@ export class BrowserGuardSession {
       ]);
       await client.Runtime.addBinding({ name: '__kpAttempt' });
       await client.Page.addScriptToEvaluateOnNewDocument({
+        source: ANTI_DETECTION_SOURCE,
+      });
+      await client.Page.addScriptToEvaluateOnNewDocument({
         source: this.options.guardSource,
       });
+      await client.Runtime.evaluate({ expression: ANTI_DETECTION_SOURCE });
     } catch {
       return;
     }
