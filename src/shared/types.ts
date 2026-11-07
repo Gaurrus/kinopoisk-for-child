@@ -16,25 +16,18 @@ export interface SettingsState extends LimiterSnapshot {
   mode: SettingsWindowMode;
   episodeLimit: number;
   startUrl: string;
-  hasPin: boolean;
-  unlocked: boolean;
-  auth: AuthStatus;
-  logPath: string;
   player: 'browser' | 'electron';
-  loginCompleted: boolean;
 }
 
 export interface SavePayload {
   episodeLimit: number;
   startUrl: string;
-  pin?: string;
   start: boolean;
 }
 
 export interface ActionResult {
   ok: boolean;
   error?: string;
-  action?: 'login' | 'controlled';
 }
 
 export interface AttemptResult {

@@ -7,18 +7,8 @@ contextBridge.exposeInMainWorld('kp', {
   start: (): Promise<ActionResult> => ipcRenderer.invoke(CHANNELS.settingsStart),
   save: (payload: SavePayload): Promise<ActionResult> =>
     ipcRenderer.invoke(CHANNELS.settingsSave, payload),
-  verifyPin: (pin: string): Promise<ActionResult> =>
-    ipcRenderer.invoke(CHANNELS.settingsVerifyPin, pin),
   logout: (): Promise<ActionResult> => ipcRenderer.invoke(CHANNELS.sessionLogout),
   close: (): Promise<void> => ipcRenderer.invoke(CHANNELS.settingsClose),
-  openLogs: (): Promise<ActionResult> => ipcRenderer.invoke(CHANNELS.openLogs),
-  loginDone: (): Promise<ActionResult> => ipcRenderer.invoke(CHANNELS.settingsLoginDone),
-  loginCancel: (): Promise<ActionResult> =>
-    ipcRenderer.invoke(CHANNELS.settingsLoginCancel),
-  relogin: (): Promise<ActionResult> => ipcRenderer.invoke(CHANNELS.settingsRelogin),
-  onLoginClosed: (callback: () => void): void => {
-    ipcRenderer.on(CHANNELS.loginClosed, () => callback());
-  },
   onState: (callback: (state: unknown) => void): void => {
     ipcRenderer.on(CHANNELS.guardState, (_event, snapshot: unknown) => callback(snapshot));
   },

@@ -7,17 +7,11 @@ export const DEFAULT_START_URL = 'https://hd.kinopoisk.ru/film/48609c673b79f2e58
 export interface Settings {
   episodeLimit: number;
   startUrl: string;
-  pin: string;
-  loginCompleted: boolean;
-  lastLogin: string;
 }
 
 const DEFAULTS: Settings = {
   episodeLimit: 2,
   startUrl: DEFAULT_START_URL,
-  pin: '',
-  loginCompleted: false,
-  lastLogin: '',
 };
 
 const KINOPOISK_URL_RE = /^https:\/\/hd\.kinopoisk\.ru\//i;
@@ -30,10 +24,6 @@ export function isValidStartUrl(value: unknown): value is string {
   return typeof value === 'string' && KINOPOISK_URL_RE.test(value.trim());
 }
 
-export function isValidPin(value: unknown): value is string {
-  return typeof value === 'string' && (value === '' || /^\d{4,8}$/.test(value));
-}
-
 export function loadSettings(dir: string): Settings {
   try {
     const raw = fs.readFileSync(settingsFile(dir), 'utf8');
@@ -41,9 +31,6 @@ export function loadSettings(dir: string): Settings {
     return {
       episodeLimit: normalizeLimit(parsed.episodeLimit ?? DEFAULTS.episodeLimit),
       startUrl: isValidStartUrl(parsed.startUrl) ? parsed.startUrl.trim() : DEFAULTS.startUrl,
-      pin: isValidPin(parsed.pin) ? parsed.pin : DEFAULTS.pin,
-      loginCompleted: parsed.loginCompleted === true,
-      lastLogin: typeof parsed.lastLogin === 'string' ? parsed.lastLogin : '',
     };
   } catch {
     return { ...DEFAULTS };

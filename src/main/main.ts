@@ -14,7 +14,6 @@ import { BrowserGuardSession, findBrowser } from './browser-session';
 import { initDrmLog, installDrmLogging, logDrm } from './diagnostics';
 import { EpisodeLimiter, normalizeLimit } from './limiter';
 import {
-  isValidPin,
   isValidStartUrl,
   loadSettings,
   saveSettings,
@@ -32,11 +31,8 @@ interface EcsComponents {
 let mainWindow: BrowserWindow | null = null;
 let settingsWindow: BrowserWindow | null = null;
 let settingsWindowMode: SettingsWindowMode = 'start';
-let settingsUnlocked = false;
-let pinFailures = 0;
 let limiter: EpisodeLimiter | null = null;
 let browserSession: BrowserGuardSession | null = null;
-let loginModeActive = false;
 let settings: Settings;
 let widevineReady: Promise<void> | null = null;
 
@@ -93,31 +89,6 @@ function openExternal(raw: string): void {
   });
 }
 
-async function getAuthStatus(): Promise<AuthStatus> {
-  if (browserSession?.isActive()) {
-    return browserSession.getAuth();
-  }
-  if (settings?.lastLogin && findBrowser()) {
-    return { loggedIn: true, login: settings.lastLogin };
-  }
-  try {
-    const ses = session.fromPartition(PARTITION);
-    const [kinopoiskCookies, yandexCookies] = await Promise.all([
-      ses.cookies.get({ domain: '.kinopoisk.ru' }),
-      ses.cookies.get({ domain: '.yandex.ru' }),
-    ]);
-    const login =
-      kinopoiskCookies.find((cookie) => cookie.name === 'yandex_login')?.value ??
-      yandexCookies.find((cookie) => cookie.name === 'yandex_login')?.value ??
-      null;
-    const hasSession =
-      yandexCookies.some((cookie) => /^(session_id|sessionid)$/i.test(cookie.name)) ||
-      kinopoiskCookies.some((cookie) => /^(session_id|sessionid)$/i.test(cookie.name));
-    return { loggedIn: Boolean(login) || hasSession, login };
-  } catch {
-    return { loggedIn: false, login: null };
-  }
-}
 
 function fallbackSnapshot() {
   const limit = normalizeLimit(settings.episodeLimit);
@@ -135,12 +106,7 @@ async function getSettingsState(): Promise<SettingsState> {
     mode: settingsWindowMode,
     episodeLimit: settings.episodeLimit,
     startUrl: settings.startUrl,
-    hasPin: settings.pin.length > 0,
-    unlocked: settingsUnlocked,
-    auth: await getAuthStatus(),
-    logPath: path.join(app.getPath('userData'), 'drm.log'),
     player: process.env.KP_PLAYER === 'electron' || !findBrowser() ? 'electron' : 'browser',
-    loginCompleted: settings.loginCompleted,
     ...snapshot,
   };
 }
@@ -165,8 +131,6 @@ function closeSettingsWindow(): void {
 
 function openSettingsWindow(mode: SettingsWindowMode): void {
   settingsWindowMode = mode;
-  pinFailures = 0;
-  settingsUnlocked = settings.pin.length === 0;
 
   if (settingsWindow && !settingsWindow.isDestroyed()) {
     settingsWindow.focus();
@@ -175,7 +139,7 @@ function openSettingsWindow(mode: SettingsWindowMode): void {
 
   settingsWindow = new BrowserWindow({
     width: 560,
-    height: mode === 'start' ? 720 : 660,
+    height: mode === 'start' ? 640 : 600,
     resizable: false,
     maximizable: false,
     fullscreenable: false,
@@ -297,26 +261,11 @@ function browserCallbacks(): {
   return {
     onOpenSettings: () => openSettingsWindow('edit'),
     onExit: () => {
-      const wasLogin = loginModeActive;
       browserSession = null;
-      loginModeActive = false;
-      if (wasLogin) {
-        if (settingsWindow && !settingsWindow.isDestroyed()) {
-          settingsWindow.webContents.send(CHANNELS.loginClosed);
-        } else {
-          app.quit();
-        }
-        return;
-      }
       app.quit();
     },
     onSnapshotChanged: () => broadcastState(),
-    onAuthChanged: (auth) => {
-      if (auth.login && auth.login !== settings.lastLogin) {
-        settings.lastLogin = auth.login;
-        saveSettings(app.getPath('userData'), settings);
-      }
-    },
+    onAuthChanged: () => undefined,
   };
 }
 
@@ -361,33 +310,10 @@ async function startInSystemBrowser(
   }
 }
 
-async function startLoginMode(startUrl: string): Promise<void> {
-  if (!findBrowser()) {
-    throw new Error('Google Chrome или Microsoft Edge не найден');
-  }
-  if (browserSession) {
-    await browserSession.stop();
-    browserSession = null;
-  }
-
-  const activeLimiter = limiter ?? new EpisodeLimiter(settings.episodeLimit);
-  browserSession = new BrowserGuardSession({
-    profileDir: path.join(app.getPath('userData'), 'browser-profile'),
-    startUrl,
-    guardSource: '',
-    limiter: activeLimiter,
-    cdpEnabled: false,
-    ...browserCallbacks(),
-  });
-  loginModeActive = true;
-  await browserSession.start();
-}
-
 async function startControlled(
   startUrl: string,
   activeLimiter: EpisodeLimiter,
 ): Promise<void> {
-  loginModeActive = false;
   if (browserSession) {
     await browserSession.stop();
     browserSession = null;
@@ -412,10 +338,7 @@ async function startControlled(
   broadcastState();
 }
 
-async function startSession(
-  limit: number,
-  startUrl: string,
-): Promise<'login' | 'controlled'> {
+async function startSession(limit: number, startUrl: string): Promise<void> {
   settings.episodeLimit = normalizeLimit(limit);
   settings.startUrl = isValidStartUrl(startUrl) ? startUrl.trim() : settings.startUrl;
   saveSettings(app.getPath('userData'), settings);
@@ -423,13 +346,7 @@ async function startSession(
   const activeLimiter = new EpisodeLimiter(settings.episodeLimit);
   limiter = activeLimiter;
 
-  if (!settings.loginCompleted) {
-    await startLoginMode(settings.startUrl);
-    return 'login';
-  }
-
   await startControlled(settings.startUrl, activeLimiter);
-  return 'controlled';
 }
 
 function registerIpc(): void {
@@ -437,34 +354,14 @@ function registerIpc(): void {
 
   ipcMain.handle(CHANNELS.settingsStart, async (): Promise<ActionResult> => {
     try {
-      const action = await startSession(settings.episodeLimit, settings.startUrl);
-      return { ok: true, action };
+      await startSession(settings.episodeLimit, settings.startUrl);
+      return { ok: true };
     } catch (error) {
       return { ok: false, error: error instanceof Error ? error.message : String(error) };
     }
   });
 
-  ipcMain.handle(CHANNELS.settingsVerifyPin, (_event, pin: unknown): ActionResult => {
-    if (settings.pin.length === 0) {
-      settingsUnlocked = true;
-      return { ok: true };
-    }
-    if (pinFailures >= 5) {
-      return { ok: false, error: 'Слишком много попыток. Перезапустите приложение.' };
-    }
-    if (typeof pin === 'string' && pin === settings.pin) {
-      settingsUnlocked = true;
-      pinFailures = 0;
-      return { ok: true };
-    }
-    pinFailures += 1;
-    return { ok: false, error: 'Неверный PIN' };
-  });
-
   ipcMain.handle(CHANNELS.settingsSave, async (_event, payload: unknown): Promise<ActionResult> => {
-    if (settings.pin.length > 0 && !settingsUnlocked) {
-      return { ok: false, error: 'Сначала введите PIN' };
-    }
     if (typeof payload !== 'object' || payload === null) {
       return { ok: false, error: 'Некорректные данные' };
     }
@@ -476,21 +373,14 @@ function registerIpc(): void {
     if (!isValidStartUrl(startUrl)) {
       return { ok: false, error: 'Ссылка должна вести на https://hd.kinopoisk.ru/' };
     }
-    if ('pin' in data && !isValidPin(data.pin)) {
-      return { ok: false, error: 'PIN должен состоять из 4–8 цифр или быть пустым' };
-    }
-
     settings.episodeLimit = limit;
     settings.startUrl = startUrl.trim();
-    if ('pin' in data && typeof data.pin === 'string') {
-      settings.pin = data.pin;
-    }
     saveSettings(app.getPath('userData'), settings);
 
     if (data.start === true) {
       try {
-        const action = await startSession(limit, settings.startUrl);
-        return { ok: true, action };
+        await startSession(limit, settings.startUrl);
+        return { ok: true };
       } catch (error) {
         return { ok: false, error: error instanceof Error ? error.message : String(error) };
       }
@@ -504,57 +394,12 @@ function registerIpc(): void {
     return { ok: true };
   });
 
-  ipcMain.handle(CHANNELS.settingsLoginDone, async (): Promise<ActionResult> => {
-    try {
-      settings.loginCompleted = true;
-      saveSettings(app.getPath('userData'), settings);
-
-      if (browserSession) {
-        await browserSession.stop();
-        browserSession = null;
-      }
-      loginModeActive = false;
-
-      const activeLimiter = limiter ?? new EpisodeLimiter(settings.episodeLimit);
-      limiter = activeLimiter;
-      await startControlled(settings.startUrl, activeLimiter);
-      return { ok: true };
-    } catch (error) {
-      return { ok: false, error: error instanceof Error ? error.message : String(error) };
-    }
-  });
-
-  ipcMain.handle(CHANNELS.settingsLoginCancel, async (): Promise<ActionResult> => {
-    if (browserSession) {
-      await browserSession.stop();
-      browserSession = null;
-    }
-    loginModeActive = false;
-    return { ok: true };
-  });
-
-  ipcMain.handle(CHANNELS.settingsRelogin, async (): Promise<ActionResult> => {
-    try {
-      await startLoginMode(settings.startUrl);
-      return { ok: true, action: 'login' };
-    } catch (error) {
-      return { ok: false, error: error instanceof Error ? error.message : String(error) };
-    }
-  });
-
   ipcMain.handle(CHANNELS.settingsClose, () => {
     closeSettingsWindow();
   });
 
-  ipcMain.handle(CHANNELS.openLogs, async (): Promise<ActionResult> => {
-    const error = await shell.openPath(app.getPath('userData'));
-    return error ? { ok: false, error } : { ok: true };
-  });
-
   ipcMain.handle(CHANNELS.sessionLogout, async (): Promise<ActionResult> => {
     try {
-      settings.lastLogin = '';
-      saveSettings(app.getPath('userData'), settings);
       if (browserSession?.isActive()) {
         await browserSession.clearSession();
         return { ok: true };
