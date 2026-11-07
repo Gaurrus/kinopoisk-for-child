@@ -8,12 +8,16 @@ export interface Settings {
   episodeLimit: number;
   startUrl: string;
   pin: string;
+  loginCompleted: boolean;
+  lastLogin: string;
 }
 
 const DEFAULTS: Settings = {
   episodeLimit: 2,
   startUrl: DEFAULT_START_URL,
   pin: '',
+  loginCompleted: false,
+  lastLogin: '',
 };
 
 const KINOPOISK_URL_RE = /^https:\/\/hd\.kinopoisk\.ru\//i;
@@ -38,6 +42,8 @@ export function loadSettings(dir: string): Settings {
       episodeLimit: normalizeLimit(parsed.episodeLimit ?? DEFAULTS.episodeLimit),
       startUrl: isValidStartUrl(parsed.startUrl) ? parsed.startUrl.trim() : DEFAULTS.startUrl,
       pin: isValidPin(parsed.pin) ? parsed.pin : DEFAULTS.pin,
+      loginCompleted: parsed.loginCompleted === true,
+      lastLogin: typeof parsed.lastLogin === 'string' ? parsed.lastLogin : '',
     };
   } catch {
     return { ...DEFAULTS };

@@ -92,6 +92,7 @@ export interface BrowserSessionOptions {
   startUrl: string;
   guardSource: string;
   limiter: EpisodeLimiter;
+  cdpEnabled?: boolean;
   onOpenSettings: () => void;
   onExit: () => void;
   onSnapshotChanged: () => void;
@@ -142,7 +143,7 @@ export class BrowserGuardSession {
       /* no stale port */
     }
 
-    const useCdp = process.env.KP_NO_CDP !== '1';
+    const useCdp = this.options.cdpEnabled !== false && process.env.KP_NO_CDP !== '1';
     const args = [
       `--user-data-dir=${this.options.profileDir}`,
       '--no-first-run',
@@ -154,6 +155,7 @@ export class BrowserGuardSession {
     if (useCdp) {
       args.push(
         '--remote-debugging-port=0',
+        '--autoplay-policy=no-user-gesture-required',
         `--app=${this.options.startUrl}`,
         '--disable-background-mode',
         '--disable-session-crashed-bubble',

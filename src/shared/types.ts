@@ -21,6 +21,7 @@ export interface SettingsState extends LimiterSnapshot {
   auth: AuthStatus;
   logPath: string;
   player: 'browser' | 'electron';
+  loginCompleted: boolean;
 }
 
 export interface SavePayload {
@@ -33,6 +34,7 @@ export interface SavePayload {
 export interface ActionResult {
   ok: boolean;
   error?: string;
+  action?: 'login' | 'controlled';
 }
 
 export interface AttemptResult {

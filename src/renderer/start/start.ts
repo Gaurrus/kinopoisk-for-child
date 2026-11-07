@@ -8,6 +8,7 @@
   const screens = {
     loading: byId<HTMLElement>('screen-loading'),
     locked: byId<HTMLElement>('screen-locked'),
+    login: byId<HTMLElement>('screen-login'),
     pin: byId<HTMLElement>('screen-pin'),
     form: byId<HTMLElement>('screen-form'),
   };
@@ -15,6 +16,12 @@
   const lockedLimit = byId<HTMLElement>('locked-limit');
   const btnWatch = byId<HTMLButtonElement>('btn-watch');
   const btnEdit = byId<HTMLButtonElement>('btn-edit');
+
+  const loginError = byId<HTMLParagraphElement>('login-error');
+  const btnLoginDone = byId<HTMLButtonElement>('btn-login-done');
+  const btnLoginRetry = byId<HTMLButtonElement>('btn-login-retry');
+  const btnLoginCancel = byId<HTMLButtonElement>('btn-login-cancel');
+  const btnRelogin = byId<HTMLButtonElement>('btn-relogin');
 
   const pinForm = byId<HTMLFormElement>('pin-form');
   const pinInput = byId<HTMLInputElement>('pin-input');
@@ -39,6 +46,7 @@
 
   let state: KpSettingsState | null = null;
   let forceForm = false;
+  let loginVisible = false;
 
   function show(name: keyof typeof screens): void {
     for (const [key, element] of Object.entries(screens)) {
@@ -80,12 +88,23 @@
     }
   }
 
+  function showLogin(): void {
+    loginVisible = true;
+    setError(loginError, null);
+    render();
+  }
+
   function render(): void {
     if (!state) return;
 
     lockedLimit.textContent = String(state.episodeLimit);
     logPath.textContent = state.logPath;
     renderAuth(state);
+
+    if (loginVisible) {
+      show('login');
+      return;
+    }
 
     if (state.mode === 'start' && state.hasPin && !forceForm) {
       show('locked');
@@ -120,12 +139,51 @@
     btnWatch.disabled = true;
     try {
       const result = await window.kp.start();
-      if (!result.ok) {
-        btnWatch.disabled = false;
-      }
+      btnWatch.disabled = false;
+      if (!result.ok) return;
+      if (result.action === 'login') showLogin();
     } catch {
       btnWatch.disabled = false;
     }
+  });
+
+  btnLoginDone.addEventListener('click', async () => {
+    setError(loginError, null);
+    btnLoginDone.disabled = true;
+    try {
+      const result = await window.kp.loginDone();
+      if (!result.ok) {
+        setError(loginError, result.error ?? 'Не удалось продолжить');
+      }
+    } finally {
+      btnLoginDone.disabled = false;
+    }
+  });
+
+  btnLoginRetry.addEventListener('click', async () => {
+    setError(loginError, null);
+    const result = await window.kp.relogin();
+    if (!result.ok) {
+      setError(loginError, result.error ?? 'Не удалось открыть окно входа');
+    }
+  });
+
+  btnLoginCancel.addEventListener('click', async () => {
+    await window.kp.loginCancel();
+    loginVisible = false;
+    await refresh().catch((error: unknown) => {
+      console.error('[settings] failed to refresh state', error);
+    });
+  });
+
+  btnRelogin.addEventListener('click', async () => {
+    setError(formError, null);
+    const result = await window.kp.relogin();
+    if (!result.ok) {
+      setError(formError, result.error ?? 'Не удалось открыть окно входа');
+      return;
+    }
+    showLogin();
   });
 
   btnEdit.addEventListener('click', () => {
@@ -198,6 +256,8 @@
       const result = await window.kp.save(payload);
       if (!result.ok) {
         setError(formError, result.error ?? 'Не удалось сохранить настройки');
+      } else if (result.action === 'login') {
+        showLogin();
       }
     } finally {
       submitButton.disabled = false;
@@ -220,6 +280,15 @@
     } else {
       setError(formError, result.error ?? 'Не удалось выйти из аккаунта');
     }
+  });
+
+  window.kp.onLoginClosed(() => {
+    loginVisible = true;
+    render();
+    setError(
+      loginError,
+      'Окно браузера закрыто. Нажмите «Открыть окно входа заново» или «Отмена».',
+    );
   });
 
   void refresh().catch((error: unknown) => {

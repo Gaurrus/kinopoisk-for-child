@@ -40,6 +40,28 @@
         <p class="hint">Изменение лимита защищено PIN-кодом.</p>
       </section>
 
+      <section id="screen-login" class="screen" hidden>
+        <p class="eyebrow">Вход</p>
+        <h1 class="title">Войдите в аккаунт</h1>
+        <p class="muted">
+          Открылось обычное окно браузера. Войдите в Kinopoisk (в том числе через
+          Google), затем вернитесь сюда и нажмите «Готово».
+        </p>
+        <p id="login-error" class="error" hidden></p>
+        <button id="btn-login-done" class="button button_primary" type="button">
+          Готово, продолжить
+        </button>
+        <button id="btn-login-retry" class="button button_secondary" type="button">
+          Открыть окно входа заново
+        </button>
+        <button id="btn-login-cancel" class="button button_ghost" type="button">
+          Отмена
+        </button>
+        <p class="hint">
+          Вход через Google блокируется в управляемом окне, поэтому выполняется отдельно.
+        </p>
+      </section>
+
       <section id="screen-pin" class="screen" hidden>
         <p class="eyebrow">Только для взрослых</p>
         <h1 class="title">Введите PIN</h1>
@@ -110,6 +132,9 @@
           <div class="account__hint">
             Вход выполняется один раз в окне браузера и запоминается между запусками.
           </div>
+          <button id="btn-relogin" class="link" type="button">
+            Войти заново (без контроля)
+          </button>
           <button id="btn-logout" class="link" type="button">Выйти из аккаунта</button>
           <button id="btn-open-logs" class="link" type="button">Открыть папку с логами</button>
           <div class="account__hint log-path" id="log-path"></div>

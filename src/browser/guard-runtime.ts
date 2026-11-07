@@ -22,6 +22,8 @@ export interface GuardTransport {
 const UI_ROOT_ID = 'kp-child-guard-ui';
 const COUNT_THRESHOLD_SEC = 5;
 const MIN_WEAK_DURATION_SEC = 60;
+const AUTO_CONTINUE_DELAYS_MS = [0, 800, 1600, 3000, 5000, 8000, 12000];
+const AUTO_CONTINUE_TEXT = 'продолжить просмотр';
 const KINOPOISK_HOST_RE = /(^|\.)kinopoisk\.ru$/i;
 
 interface CurrentPlayback {
@@ -59,6 +61,7 @@ let blocked = false;
 let current: CurrentPlayback | null = null;
 let lastKey: string | null = null;
 let lastEnded = false;
+let autoContinueDone = false;
 const repeatCounters = new Map<string, number>();
 
 function isUnlimited(): boolean {
@@ -318,6 +321,31 @@ function injectUi(): void {
   renderBadge();
 }
 
+function tryAutoContinue(): void {
+  if (autoContinueDone || blocked) return;
+  const nodes = document.querySelectorAll<HTMLElement>(
+    'button, a, [role="button"], [data-testid*="continue" i]',
+  );
+  for (const node of Array.from(nodes)) {
+    if (node.offsetParent === null) continue;
+    const text = (node.textContent ?? '').replace(/\s+/g, ' ').trim().toLowerCase();
+    if (!text.includes(AUTO_CONTINUE_TEXT)) continue;
+    autoContinueDone = true;
+    try {
+      node.click();
+    } catch {
+      /* ignore */
+    }
+    return;
+  }
+}
+
+function scheduleAutoContinue(): void {
+  for (const delay of AUTO_CONTINUE_DELAYS_MS) {
+    window.setTimeout(tryAutoContinue, delay);
+  }
+}
+
 function safeInjectUi(): void {
   try {
     injectUi();
@@ -363,6 +391,8 @@ export function startGuard(nextTransport: GuardTransport): void {
   } else {
     document.addEventListener('DOMContentLoaded', safeInjectUi, { once: true });
   }
+
+  scheduleAutoContinue();
 }
 
 const UI_MARKUP = `

@@ -36,6 +36,7 @@ let settingsUnlocked = false;
 let pinFailures = 0;
 let limiter: EpisodeLimiter | null = null;
 let browserSession: BrowserGuardSession | null = null;
+let loginModeActive = false;
 let settings: Settings;
 let widevineReady: Promise<void> | null = null;
 
@@ -96,6 +97,9 @@ async function getAuthStatus(): Promise<AuthStatus> {
   if (browserSession?.isActive()) {
     return browserSession.getAuth();
   }
+  if (settings?.lastLogin && findBrowser()) {
+    return { loggedIn: true, login: settings.lastLogin };
+  }
   try {
     const ses = session.fromPartition(PARTITION);
     const [kinopoiskCookies, yandexCookies] = await Promise.all([
@@ -136,6 +140,7 @@ async function getSettingsState(): Promise<SettingsState> {
     auth: await getAuthStatus(),
     logPath: path.join(app.getPath('userData'), 'drm.log'),
     player: process.env.KP_PLAYER === 'electron' || !findBrowser() ? 'electron' : 'browser',
+    loginCompleted: settings.loginCompleted,
     ...snapshot,
   };
 }
@@ -283,31 +288,64 @@ function createMainWindow(): BrowserWindow {
   return window;
 }
 
+function browserCallbacks(): {
+  onOpenSettings: () => void;
+  onExit: () => void;
+  onSnapshotChanged: () => void;
+  onAuthChanged: (auth: AuthStatus) => void;
+} {
+  return {
+    onOpenSettings: () => openSettingsWindow('edit'),
+    onExit: () => {
+      const wasLogin = loginModeActive;
+      browserSession = null;
+      loginModeActive = false;
+      if (wasLogin) {
+        if (settingsWindow && !settingsWindow.isDestroyed()) {
+          settingsWindow.webContents.send(CHANNELS.loginClosed);
+        } else {
+          app.quit();
+        }
+        return;
+      }
+      app.quit();
+    },
+    onSnapshotChanged: () => broadcastState(),
+    onAuthChanged: (auth) => {
+      if (auth.login && auth.login !== settings.lastLogin) {
+        settings.lastLogin = auth.login;
+        saveSettings(app.getPath('userData'), settings);
+      }
+    },
+  };
+}
+
+function guardSource(): string | null {
+  const guardPath = path.join(__dirname, '../browser/guard.js');
+  if (!fs.existsSync(guardPath)) {
+    console.warn('[browser] guard bundle is missing');
+    return null;
+  }
+  return fs.readFileSync(guardPath, 'utf8');
+}
+
 async function startInSystemBrowser(
   startUrl: string,
   activeLimiter: EpisodeLimiter,
 ): Promise<boolean> {
   if (!findBrowser()) return false;
 
-  const guardPath = path.join(__dirname, '../browser/guard.js');
-  if (!fs.existsSync(guardPath)) {
-    console.warn('[browser] guard bundle is missing, falling back to Electron');
-    return false;
-  }
+  const source = guardSource();
+  if (!source) return false;
 
   try {
     browserSession = new BrowserGuardSession({
       profileDir: path.join(app.getPath('userData'), 'browser-profile'),
       startUrl,
-      guardSource: fs.readFileSync(guardPath, 'utf8'),
+      guardSource: source,
       limiter: activeLimiter,
-      onOpenSettings: () => openSettingsWindow('edit'),
-      onExit: () => {
-        browserSession = null;
-        app.quit();
-      },
-      onSnapshotChanged: () => broadcastState(),
-      onAuthChanged: () => undefined,
+      cdpEnabled: true,
+      ...browserCallbacks(),
     });
     await browserSession.start();
     return true;
@@ -323,16 +361,42 @@ async function startInSystemBrowser(
   }
 }
 
-async function startSession(limit: number, startUrl: string): Promise<void> {
-  settings.episodeLimit = normalizeLimit(limit);
-  settings.startUrl = isValidStartUrl(startUrl) ? startUrl.trim() : settings.startUrl;
-  saveSettings(app.getPath('userData'), settings);
+async function startLoginMode(startUrl: string): Promise<void> {
+  if (!findBrowser()) {
+    throw new Error('Google Chrome или Microsoft Edge не найден');
+  }
+  if (browserSession) {
+    await browserSession.stop();
+    browserSession = null;
+  }
 
-  const activeLimiter = new EpisodeLimiter(settings.episodeLimit);
-  limiter = activeLimiter;
+  const activeLimiter = limiter ?? new EpisodeLimiter(settings.episodeLimit);
+  browserSession = new BrowserGuardSession({
+    profileDir: path.join(app.getPath('userData'), 'browser-profile'),
+    startUrl,
+    guardSource: '',
+    limiter: activeLimiter,
+    cdpEnabled: false,
+    ...browserCallbacks(),
+  });
+  loginModeActive = true;
+  await browserSession.start();
+}
 
-  const useBrowser = process.env.KP_PLAYER !== 'electron';
-  if (useBrowser && (await startInSystemBrowser(settings.startUrl, activeLimiter))) {
+async function startControlled(
+  startUrl: string,
+  activeLimiter: EpisodeLimiter,
+): Promise<void> {
+  loginModeActive = false;
+  if (browserSession) {
+    await browserSession.stop();
+    browserSession = null;
+  }
+
+  if (
+    process.env.KP_PLAYER !== 'electron' &&
+    (await startInSystemBrowser(startUrl, activeLimiter))
+  ) {
     closeSettingsWindow();
     broadcastState();
     return;
@@ -344,16 +408,40 @@ async function startSession(limit: number, startUrl: string): Promise<void> {
     mainWindow = createMainWindow();
   }
   closeSettingsWindow();
-  void mainWindow.loadURL(settings.startUrl);
+  void mainWindow.loadURL(startUrl);
   broadcastState();
+}
+
+async function startSession(
+  limit: number,
+  startUrl: string,
+): Promise<'login' | 'controlled'> {
+  settings.episodeLimit = normalizeLimit(limit);
+  settings.startUrl = isValidStartUrl(startUrl) ? startUrl.trim() : settings.startUrl;
+  saveSettings(app.getPath('userData'), settings);
+
+  const activeLimiter = new EpisodeLimiter(settings.episodeLimit);
+  limiter = activeLimiter;
+
+  if (!settings.loginCompleted) {
+    await startLoginMode(settings.startUrl);
+    return 'login';
+  }
+
+  await startControlled(settings.startUrl, activeLimiter);
+  return 'controlled';
 }
 
 function registerIpc(): void {
   ipcMain.handle(CHANNELS.settingsGet, () => getSettingsState());
 
   ipcMain.handle(CHANNELS.settingsStart, async (): Promise<ActionResult> => {
-    await startSession(settings.episodeLimit, settings.startUrl);
-    return { ok: true };
+    try {
+      const action = await startSession(settings.episodeLimit, settings.startUrl);
+      return { ok: true, action };
+    } catch (error) {
+      return { ok: false, error: error instanceof Error ? error.message : String(error) };
+    }
   });
 
   ipcMain.handle(CHANNELS.settingsVerifyPin, (_event, pin: unknown): ActionResult => {
@@ -400,8 +488,12 @@ function registerIpc(): void {
     saveSettings(app.getPath('userData'), settings);
 
     if (data.start === true) {
-      await startSession(limit, settings.startUrl);
-      return { ok: true };
+      try {
+        const action = await startSession(limit, settings.startUrl);
+        return { ok: true, action };
+      } catch (error) {
+        return { ok: false, error: error instanceof Error ? error.message : String(error) };
+      }
     }
 
     if (limiter) {
@@ -410,6 +502,44 @@ function registerIpc(): void {
     }
     closeSettingsWindow();
     return { ok: true };
+  });
+
+  ipcMain.handle(CHANNELS.settingsLoginDone, async (): Promise<ActionResult> => {
+    try {
+      settings.loginCompleted = true;
+      saveSettings(app.getPath('userData'), settings);
+
+      if (browserSession) {
+        await browserSession.stop();
+        browserSession = null;
+      }
+      loginModeActive = false;
+
+      const activeLimiter = limiter ?? new EpisodeLimiter(settings.episodeLimit);
+      limiter = activeLimiter;
+      await startControlled(settings.startUrl, activeLimiter);
+      return { ok: true };
+    } catch (error) {
+      return { ok: false, error: error instanceof Error ? error.message : String(error) };
+    }
+  });
+
+  ipcMain.handle(CHANNELS.settingsLoginCancel, async (): Promise<ActionResult> => {
+    if (browserSession) {
+      await browserSession.stop();
+      browserSession = null;
+    }
+    loginModeActive = false;
+    return { ok: true };
+  });
+
+  ipcMain.handle(CHANNELS.settingsRelogin, async (): Promise<ActionResult> => {
+    try {
+      await startLoginMode(settings.startUrl);
+      return { ok: true, action: 'login' };
+    } catch (error) {
+      return { ok: false, error: error instanceof Error ? error.message : String(error) };
+    }
   });
 
   ipcMain.handle(CHANNELS.settingsClose, () => {
@@ -423,6 +553,8 @@ function registerIpc(): void {
 
   ipcMain.handle(CHANNELS.sessionLogout, async (): Promise<ActionResult> => {
     try {
+      settings.lastLogin = '';
+      saveSettings(app.getPath('userData'), settings);
       if (browserSession?.isActive()) {
         await browserSession.clearSession();
         return { ok: true };

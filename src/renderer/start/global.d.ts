@@ -27,6 +27,7 @@ interface KpSavePayload {
 interface KpResult {
   ok: boolean;
   error?: string;
+  action?: 'login' | 'controlled';
 }
 
 interface KpApi {
@@ -37,6 +38,10 @@ interface KpApi {
   logout(): Promise<KpResult>;
   close(): Promise<void>;
   openLogs(): Promise<KpResult>;
+  loginDone(): Promise<KpResult>;
+  loginCancel(): Promise<KpResult>;
+  relogin(): Promise<KpResult>;
+  onLoginClosed(callback: () => void): void;
   onState(callback: (state: unknown) => void): void;
 }
 
