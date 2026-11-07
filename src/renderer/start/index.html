@@ -28,7 +28,7 @@
         <h1 class="title" id="form-title">Сколько серий разрешить?</h1>
         <p class="muted">Лимит действует до закрытия приложения.</p>
 
-        <form id="settings-form" class="form">
+        <div class="form">
           <label class="field">
             <span class="field__label">Количество серий</span>
             <span class="field__row">
@@ -45,16 +45,47 @@
             </span>
           </label>
 
-          <label class="field">
-            <span class="field__label">Что открыть при запуске</span>
-            <input id="url-input" class="input" type="url" spellcheck="false" />
-          </label>
+          <div class="field">
+            <span class="field__label">Что смотрим</span>
+            <div class="series">
+              <div class="series__item">
+                <button
+                  class="series__button"
+                  type="button"
+                  data-url="https://hd.kinopoisk.ru/film/48609c673b79f2e589e08b9cb9c4faf5"
+                >
+                  Три кота
+                </button>
+                <button
+                  class="series__link"
+                  type="button"
+                  data-url="https://hd.kinopoisk.ru/film/48609c673b79f2e589e08b9cb9c4faf5"
+                >
+                  https://hd.kinopoisk.ru/film/48609c673b79f2e589e08b9cb9c4faf5
+                </button>
+              </div>
+
+              <div class="series__item">
+                <button
+                  class="series__button"
+                  type="button"
+                  data-url="https://hd.kinopoisk.ru/film/4792edeebb0ef6e585489913d2255371"
+                >
+                  Машины-помощники
+                </button>
+                <button
+                  class="series__link"
+                  type="button"
+                  data-url="https://hd.kinopoisk.ru/film/4792edeebb0ef6e585489913d2255371"
+                >
+                  https://hd.kinopoisk.ru/film/4792edeebb0ef6e585489913d2255371
+                </button>
+              </div>
+            </div>
+          </div>
 
           <p id="form-error" class="error" hidden></p>
-          <button id="submit-button" class="button button_primary" type="submit">
-            Начать просмотр
-          </button>
-        </form>
+        </div>
 
         <div class="account">
           <div class="account__status">Вход сохраняется в браузере между запусками</div>
