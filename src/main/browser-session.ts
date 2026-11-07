@@ -362,6 +362,11 @@ export class BrowserGuardSession {
       } catch {
         /* page may be gone */
       }
+
+      if (!outcome.allowed) {
+        await this.stop();
+        this.options.onExit();
+      }
       return;
     }
 

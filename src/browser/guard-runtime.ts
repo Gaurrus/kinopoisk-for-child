@@ -54,8 +54,6 @@ let host: HTMLDivElement | null = null;
 let shadow: ShadowRoot | null = null;
 let badge: HTMLDivElement | null = null;
 let badgeText: HTMLSpanElement | null = null;
-let overlay: HTMLDivElement | null = null;
-let overlayLimitText: HTMLSpanElement | null = null;
 
 let blocked = false;
 let current: CurrentPlayback | null = null;
@@ -82,10 +80,6 @@ function applyState(snapshot: GuardSnapshot): void {
   }
 
   renderBadge();
-
-  if (blocked && current && (isUnlimited() || allowedKeys.has(current.key))) {
-    hideOverlay();
-  }
 }
 
 function renderBadge(): void {
@@ -182,6 +176,13 @@ function beginPlayback(video: HTMLVideoElement): void {
     key = `${key}#${next}`;
   }
 
+  if (!isUnlimited() && used >= limit && !allowedKeys.has(key)) {
+    blocked = true;
+    if (!video.paused) video.pause();
+    transport?.quit();
+    return;
+  }
+
   lastEnded = false;
   lastKey = key;
 
@@ -201,11 +202,11 @@ async function attempt(key: string): Promise<boolean> {
   try {
     const result = await transport.attempt(key);
     if (result.snapshot) applyState(result.snapshot);
-    if (result.allowed) {
-      hideOverlay();
-      return true;
-    }
-    showOverlay();
+    if (result.allowed) return true;
+
+    blocked = true;
+    if (current && !current.video.paused) current.video.pause();
+    transport.quit();
     return false;
   } catch (error) {
     console.error('[guard] attempt failed', error);
@@ -240,34 +241,22 @@ function onTimeUpdate(event: Event): void {
 function onEnded(event: Event): void {
   const video = event.target;
   if (!(video instanceof HTMLVideoElement)) return;
+
+  const endedKey = current && current.video === video ? current.key : null;
   lastEnded = true;
   if (current && current.video === video) {
     current = null;
   }
-}
 
-function pauseAllVideos(): void {
-  for (const video of Array.from(document.querySelectorAll('video'))) {
-    if (!video.paused) video.pause();
+  if (
+    endedKey &&
+    !isUnlimited() &&
+    used >= limit &&
+    allowedKeys.has(endedKey)
+  ) {
+    blocked = true;
+    window.setTimeout(() => transport?.quit(), 1200);
   }
-}
-
-function showOverlay(): void {
-  if (!overlay) return;
-  if (document.fullscreenElement) {
-    void document.exitFullscreen().catch(() => undefined);
-  }
-  blocked = true;
-  pauseAllVideos();
-  if (overlayLimitText) overlayLimitText.textContent = String(limit);
-  overlay.style.display = 'flex';
-  badge?.classList.add('danger');
-}
-
-function hideOverlay(): void {
-  blocked = false;
-  if (overlay) overlay.style.display = 'none';
-  renderBadge();
 }
 
 function injectUi(): void {
@@ -290,32 +279,6 @@ function injectUi(): void {
 
   badge = shadow.querySelector<HTMLDivElement>('.badge');
   badgeText = shadow.querySelector<HTMLSpanElement>('.badge__text');
-  overlay = shadow.querySelector<HTMLDivElement>('.overlay');
-  overlayLimitText = shadow.querySelector<HTMLSpanElement>('.overlay__limit');
-
-  if (overlay) overlay.style.display = 'none';
-
-  const retry = shadow.querySelector<HTMLButtonElement>('.overlay__retry');
-  const home = shadow.querySelector<HTMLButtonElement>('.overlay__home');
-  const quit = shadow.querySelector<HTMLButtonElement>('.overlay__quit');
-
-  retry?.addEventListener('click', () => {
-    if (!current) {
-      hideOverlay();
-      return;
-    }
-    current.reported = false;
-    void attempt(current.key);
-  });
-
-  home?.addEventListener('click', () => {
-    hideOverlay();
-    location.assign('https://hd.kinopoisk.ru/');
-  });
-
-  quit?.addEventListener('click', () => {
-    transport?.quit();
-  });
 
   document.documentElement.appendChild(host);
   renderBadge();
@@ -400,27 +363,6 @@ const UI_MARKUP = `
     <span class="badge__dot"></span>
     <span class="badge__text">...</span>
   </div>
-  <div class="overlay" role="dialog" aria-modal="true">
-    <div class="overlay__card">
-      <div class="overlay__icon" aria-hidden="true">
-        <svg viewBox="0 0 24 24" width="34" height="34" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
-          <rect x="3" y="4" width="18" height="16" rx="3"></rect>
-          <path d="M10 9v6l5-3-5-3Z"></path>
-        </svg>
-      </div>
-      <h1 class="overlay__title">Серии на этот запуск закончились</h1>
-      <p class="overlay__text">
-        Разрешено <b class="overlay__limit">0</b> серий. Можно вернуться к просмотру позже
-        или попросить взрослых изменить лимит.
-      </p>
-      <div class="overlay__actions">
-        <button class="overlay__retry" type="button">Попробовать снова</button>
-        <button class="overlay__home" type="button">На главную</button>
-        <button class="overlay__quit overlay__quit_ghost" type="button">Закрыть приложение</button>
-      </div>
-      <p class="overlay__hint">Взрослым: Ctrl+Shift+L — настройки</p>
-    </div>
-  </div>
 `;
 
 const UI_STYLES = `
@@ -459,85 +401,5 @@ const UI_STYLES = `
   }
   .badge.danger .badge__dot {
     background: #ff5c5c;
-  }
-  .overlay {
-    position: fixed;
-    inset: 0;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    padding: 24px;
-    background: rgba(7, 9, 13, 0.93);
-    pointer-events: auto;
-    z-index: 2;
-  }
-  .overlay__card {
-    width: min(520px, 100%);
-    padding: 32px;
-    border-radius: 20px;
-    background: #151922;
-    border: 1px solid rgba(255, 255, 255, 0.08);
-    box-shadow: 0 24px 80px rgba(0, 0, 0, 0.55);
-    color: #eef1f7;
-    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif;
-    text-align: center;
-  }
-  .overlay__icon {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    width: 64px;
-    height: 64px;
-    margin-bottom: 16px;
-    border-radius: 50%;
-    color: #ffd166;
-    background: rgba(255, 209, 102, 0.1);
-  }
-  .overlay__title {
-    margin: 0 0 10px;
-    font-size: 21px;
-    font-weight: 700;
-    line-height: 1.25;
-  }
-  .overlay__text {
-    margin: 0 0 22px;
-    font-size: 14px;
-    line-height: 1.6;
-    color: #aab2c5;
-  }
-  .overlay__text b {
-    color: #ffffff;
-  }
-  .overlay__actions {
-    display: flex;
-    flex-direction: column;
-    gap: 10px;
-  }
-  .overlay__actions button {
-    appearance: none;
-    border: none;
-    border-radius: 12px;
-    padding: 12px 16px;
-    font: 600 14px/1.2 inherit;
-    cursor: pointer;
-    color: #ffffff;
-    background: #ff5a1f;
-    transition: filter 0.15s ease, background 0.15s ease;
-  }
-  .overlay__actions button:hover {
-    filter: brightness(1.08);
-  }
-  .overlay__home {
-    background: rgba(255, 255, 255, 0.1) !important;
-  }
-  .overlay__quit_ghost {
-    background: transparent !important;
-    color: #8f98ac !important;
-    font-weight: 500 !important;
-  }
-  .overlay__hint {
-    margin: 18px 0 0;
-    font-size: 11px;
-    color: #5f6a80;
   }
 `;
