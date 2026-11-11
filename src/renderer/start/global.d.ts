@@ -3,6 +3,7 @@ interface KpSettingsState {
   episodeLimit: number;
   startUrl: string;
   player: 'browser' | 'electron';
+  appVersion: string;
   limit: number;
   used: number;
   remaining: number | null;

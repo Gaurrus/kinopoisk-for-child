@@ -17,6 +17,7 @@ export interface SettingsState extends LimiterSnapshot {
   episodeLimit: number;
   startUrl: string;
   player: 'browser' | 'electron';
+  appVersion: string;
 }
 
 export interface SavePayload {

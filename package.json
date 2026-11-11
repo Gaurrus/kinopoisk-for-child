@@ -1,6 +1,6 @@
 {
   "name": "kinopoisk-for-child",
-  "version": "0.1.0",
+  "version": "1.0.1",
   "private": true,
   "description": "Kinopoisk HD for kids: persistent login and a per-launch episode limit",
   "main": "dist/main/main.js",
@@ -52,7 +52,8 @@
           ]
         }
       ],
-      "artifactName": "kinopoisk-for-child-${version}-setup.${ext}"
+      "artifactName": "kinopoisk-for-child-${version}-setup.${ext}",
+      "icon": "build/icon.ico"
     },
     "nsis": {
       "oneClick": false,
@@ -63,7 +64,8 @@
     "afterPack": "scripts/evs-after-pack.js",
     "mac": {
       "identity": null,
-      "category": "public.app-category.entertainment"
+      "category": "public.app-category.entertainment",
+      "icon": "build/icon.icns"
     }
   },
   "dependencies": {

@@ -53,7 +53,7 @@
 
   async function refresh(): Promise<void> {
     state = await window.kp.getState();
-    version.textContent = 'v0.1.0';
+    version.textContent = `v${state.appVersion}`;
     render();
   }
 

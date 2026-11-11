@@ -107,6 +107,7 @@ async function getSettingsState(): Promise<SettingsState> {
     episodeLimit: settings.episodeLimit,
     startUrl: settings.startUrl,
     player: process.env.KP_PLAYER === 'electron' || !findBrowser() ? 'electron' : 'browser',
+    appVersion: app.getVersion(),
     ...snapshot,
   };
 }
