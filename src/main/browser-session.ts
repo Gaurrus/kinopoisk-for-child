@@ -160,12 +160,8 @@ export class BrowserGuardSession {
         '--disable-background-mode',
         '--disable-session-crashed-bubble',
         '--hide-crash-restore-bubble',
+        '--start-maximized',
       );
-      if (process.platform === 'darwin') {
-        args.push('--start-maximized');
-      } else {
-        args.push('--start-fullscreen', '--window-size=1280,800');
-      }
     } else {
       args.push('--new-window', this.options.startUrl);
     }
@@ -321,7 +317,7 @@ export class BrowserGuardSession {
     client.on('Page.frameNavigated', (event) => {
       if (!event.frame.parentId) {
         void this.refreshAuth(client);
-        if (process.platform === 'darwin' && KINOPOISK_URL_RE.test(event.frame.url)) {
+        if (KINOPOISK_URL_RE.test(event.frame.url)) {
           void this.maximizeWindow(client, target.id);
         }
       }
@@ -336,9 +332,7 @@ export class BrowserGuardSession {
       } catch {
         /* page may be navigating */
       }
-      if (process.platform === 'darwin') {
-        await this.maximizeWindow(client, target.id);
-      }
+      await this.maximizeWindow(client, target.id);
     }
 
     await this.refreshAuth(client);
@@ -402,6 +396,31 @@ export class BrowserGuardSession {
       await client.Browser.setWindowBounds({
         windowId,
         bounds: { windowState: 'maximized' },
+      });
+      return;
+    } catch {
+      /* fall back to explicit bounds */
+    }
+
+    try {
+      const size = await client.Runtime.evaluate({
+        expression: 'JSON.stringify({ width: screen.availWidth, height: screen.availHeight })',
+        returnByValue: true,
+      });
+      const parsed = JSON.parse(String(size.result.value)) as {
+        width: number;
+        height: number;
+      };
+      const { windowId } = await client.Browser.getWindowForTarget({ targetId });
+      await client.Browser.setWindowBounds({
+        windowId,
+        bounds: {
+          left: 0,
+          top: 0,
+          width: parsed.width,
+          height: parsed.height,
+          windowState: 'normal',
+        },
       });
     } catch {
       /* window may already be closing */
