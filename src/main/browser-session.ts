@@ -3,6 +3,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import CDP = require('chrome-remote-interface');
 import type { AuthStatus } from '../shared/types';
+import { logDrm } from './diagnostics';
 import type { EpisodeLimiter } from './limiter';
 
 export interface BrowserCandidate {
@@ -367,7 +368,9 @@ export class BrowserGuardSession {
         /* page may be gone */
       }
 
-      if (!outcome.allowed) {
+      if (outcome.allowed) {
+        void this.enterFullscreenWithRetries(client);
+      } else {
         await this.stop();
         this.options.onExit();
       }
@@ -375,7 +378,7 @@ export class BrowserGuardSession {
     }
 
     if (data.type === 'playbackStart') {
-      await this.enterFullscreen(client);
+      void this.enterFullscreenWithRetries(client);
       return;
     }
 
@@ -427,38 +430,77 @@ export class BrowserGuardSession {
     }
   }
 
-  private async enterFullscreen(client: CDP.Client): Promise<void> {
+  private async enterFullscreenWithRetries(client: CDP.Client): Promise<void> {
+    for (const wait of [0, 700, 1200, 1800, 2500]) {
+      if (wait > 0) await delay(wait);
+      if (await this.enterFullscreen(client)) return;
+    }
+    logDrm('[fullscreen] не удалось развернуть видео после нескольких попыток');
+  }
+
+  private async enterFullscreen(client: CDP.Client): Promise<boolean> {
     const expression = `(() => {
       try {
-        if (document.fullscreenElement) return true;
-        const button = document.querySelector(
-          '[aria-label*="весь экран" i],[aria-label*="fullscreen" i],[data-testid*="fullscreen" i]',
+        if (document.fullscreenElement) return 'already';
+        const label = (el) => {
+          const parts = [];
+          try { parts.push(el.getAttribute('aria-label') || ''); } catch (e) {}
+          try { parts.push(el.getAttribute('title') || ''); } catch (e) {}
+          try { parts.push(typeof el.className === 'string' ? el.className : ''); } catch (e) {}
+          return parts.join(' ').toLowerCase();
+        };
+        const candidates = Array.from(
+          document.querySelectorAll(
+            'button,[role="button"],[class*="fullscreen" i],[data-testid*="fullscreen" i]',
+          ),
         );
-        if (button && button.offsetParent !== null) {
+        const button = candidates.find(
+          (el) =>
+            /fullscreen|full-screen|full_screen|полный экран|полноэкран|весь экран|развернуть/.test(
+              label(el),
+            ) && el.getBoundingClientRect().width > 0,
+        );
+        if (button) {
           button.click();
-          return true;
+          return 'button';
         }
         const video = document.querySelector('video');
-        if (!video) return false;
+        if (!video) return 'no-video:iframes=' + document.querySelectorAll('iframe').length;
         const container =
-          video.closest('[data-testid*="player" i],[class*="player" i]') || video;
-        const target = container || video;
-        const request = target.requestFullscreen || target.webkitRequestFullscreen;
-        if (!request) return false;
-        Promise.resolve(request.call(target)).catch(() => {
-          try {
-            video.requestFullscreen();
-          } catch (e) {}
+          video.closest('[data-testid*="player" i],[class*="player" i]') ||
+          video.parentElement ||
+          video;
+        const request = container.requestFullscreen || container.webkitRequestFullscreen;
+        if (!request) return 'no-request';
+        Promise.resolve(request.call(container)).catch(() => {
+          try { video.requestFullscreen(); } catch (e) {}
         });
-        return true;
+        return 'request';
       } catch (e) {
-        return false;
+        return 'error:' + (e && e.message);
       }
     })()`;
+
     try {
-      await client.Runtime.evaluate({ expression, userGesture: true });
-    } catch {
-      /* page may be navigating */
+      const result = await client.Runtime.evaluate({
+        expression,
+        userGesture: true,
+        returnByValue: true,
+      });
+      const status = String(result.result.value ?? '');
+      await delay(600);
+      const check = await client.Runtime.evaluate({
+        expression: '!!document.fullscreenElement',
+        returnByValue: true,
+      });
+      const ok = check.result.value === true;
+      logDrm(`[fullscreen] ${status} -> ${ok ? 'ok' : 'no'}`);
+      return ok;
+    } catch (error) {
+      logDrm(
+        `[fullscreen] eval error: ${error instanceof Error ? error.message : String(error)}`,
+      );
+      return false;
     }
   }
 
