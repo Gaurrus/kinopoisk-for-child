@@ -2,6 +2,7 @@ interface KpSettingsState {
   mode: 'start' | 'edit';
   episodeLimit: number;
   startUrl: string;
+  updateUrl: string;
   player: 'browser' | 'electron';
   appVersion: string;
   limit: number;
@@ -12,6 +13,7 @@ interface KpSettingsState {
 interface KpSavePayload {
   episodeLimit: number;
   startUrl: string;
+  updateUrl: string;
   start: boolean;
 }
 

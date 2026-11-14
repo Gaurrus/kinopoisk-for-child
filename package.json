@@ -1,6 +1,6 @@
 {
   "name": "kinopoisk-for-child",
-  "version": "1.0.5",
+  "version": "1.1.0",
   "private": true,
   "description": "Kinopoisk HD for kids: persistent login and a per-launch episode limit",
   "main": "dist/main/main.js",
@@ -20,7 +20,9 @@
     "evs:sign": "node scripts/evs-sign.mjs",
     "evs:sign:dev": "node scripts/evs-sign.mjs --target dev",
     "evs:sign:packaged": "node scripts/evs-sign.mjs --target packaged",
-    "dist:mac": "yarn build && electron-builder --mac --dir"
+    "dist:mac": "yarn build && electron-builder --mac --dir",
+    "serve:updates": "node scripts/update-server.mjs",
+    "pack:mac:zip": "node scripts/pack-mac-zip.mjs"
   },
   "devDependencies": {
     "@types/chrome-remote-interface": "^0.34.1",
@@ -69,6 +71,7 @@
     }
   },
   "dependencies": {
-    "chrome-remote-interface": "^0.34.0"
+    "chrome-remote-interface": "^0.34.0",
+    "electron-updater": "^6.8.11"
   }
 }

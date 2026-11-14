@@ -16,6 +16,7 @@ export interface SettingsState extends LimiterSnapshot {
   mode: SettingsWindowMode;
   episodeLimit: number;
   startUrl: string;
+  updateUrl: string;
   player: 'browser' | 'electron';
   appVersion: string;
 }
@@ -23,6 +24,7 @@ export interface SettingsState extends LimiterSnapshot {
 export interface SavePayload {
   episodeLimit: number;
   startUrl: string;
+  updateUrl: string;
   start: boolean;
 }
 

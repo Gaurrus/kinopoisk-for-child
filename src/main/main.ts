@@ -11,10 +11,12 @@ import type {
   SettingsWindowMode,
 } from '../shared/types';
 import { BrowserGuardSession, findBrowser } from './browser-session';
+import { initUpdater } from './updater';
 import { initDrmLog, installDrmLogging, logDrm } from './diagnostics';
 import { EpisodeLimiter, normalizeLimit } from './limiter';
 import {
   isValidStartUrl,
+  isValidUpdateUrl,
   loadSettings,
   saveSettings,
   type Settings,
@@ -106,6 +108,7 @@ async function getSettingsState(): Promise<SettingsState> {
     mode: settingsWindowMode,
     episodeLimit: settings.episodeLimit,
     startUrl: settings.startUrl,
+    updateUrl: settings.updateUrl,
     player: process.env.KP_PLAYER === 'electron' || !findBrowser() ? 'electron' : 'browser',
     appVersion: app.getVersion(),
     ...snapshot,
@@ -370,12 +373,21 @@ function registerIpc(): void {
     const data = payload as Record<string, unknown>;
     const limit = normalizeLimit(data.episodeLimit);
     const startUrl = data.startUrl;
+    const updateUrl = typeof data.updateUrl === 'string' ? data.updateUrl.trim() : '';
 
     if (!isValidStartUrl(startUrl)) {
       return { ok: false, error: 'Ссылка должна вести на https://hd.kinopoisk.ru/' };
     }
+    if (!isValidUpdateUrl(updateUrl)) {
+      return {
+        ok: false,
+        error: 'Адрес сервера обновлений должен начинаться с http:// или https://',
+      };
+    }
+
     settings.episodeLimit = limit;
     settings.startUrl = startUrl.trim();
+    settings.updateUrl = updateUrl;
     saveSettings(app.getPath('userData'), settings);
 
     if (data.start === true) {
@@ -451,6 +463,7 @@ async function bootstrap(): Promise<void> {
   registerIpc();
   installDrmLogging(session.fromPartition(PARTITION));
   openSettingsWindow('start');
+  initUpdater(settings.updateUrl || process.env.KP_UPDATE_URL);
 }
 
 const gotLock = app.requestSingleInstanceLock();
