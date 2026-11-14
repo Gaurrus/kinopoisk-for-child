@@ -199,7 +199,13 @@ export class BrowserGuardSession {
     return path.join(this.options.profileDir, 'browser.pid');
   }
 
+  private killProfileProcesses(): void {
+    if (process.platform === 'win32') return;
+    spawn('pkill', ['-f', this.options.profileDir], { stdio: 'ignore' });
+  }
+
   private killStaleBrowser(): void {
+    this.killProfileProcesses();
     const file = this.pidFile();
     let pid = 0;
     try {
@@ -627,6 +633,7 @@ export class BrowserGuardSession {
         child.kill();
       }
     }
+    this.killProfileProcesses();
   }
 
   private handleExit(): void {
