@@ -150,6 +150,7 @@ export class BrowserGuardSession {
       '--no-first-run',
       '--no-default-browser-check',
       '--disable-blink-features=AutomationControlled',
+      '--test-type',
       '--lang=ru',
     ];
 
