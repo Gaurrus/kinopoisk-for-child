@@ -11,7 +11,6 @@
   };
 
   const limitInput = byId<HTMLInputElement>('limit-input');
-  const updateUrlInput = byId<HTMLInputElement>('update-url-input');
   const formError = byId<HTMLParagraphElement>('form-error');
   const formEyebrow = byId<HTMLElement>('form-eyebrow');
   const formTitle = byId<HTMLElement>('form-title');
@@ -38,7 +37,6 @@
     if (!state) return;
 
     limitInput.value = String(state.episodeLimit);
-    updateUrlInput.value = state.updateUrl;
     formEyebrow.textContent = state.mode === 'start' ? 'Перед началом' : 'Настройки';
     formTitle.textContent =
       state.mode === 'start' ? 'Что смотрим?' : 'Настройки просмотра';
@@ -70,18 +68,12 @@
       return;
     }
 
-    const updateUrl = updateUrlInput.value.trim();
-    if (updateUrl !== '' && !/^https?:\/\//i.test(updateUrl)) {
-      setError('Адрес сервера обновлений должен начинаться с http:// или https://');
-      return;
-    }
-
     trigger.disabled = true;
     try {
       const result = await window.kp.save({
         episodeLimit: limit,
         startUrl: url,
-        updateUrl,
+        updateUrl: state.updateUrl,
         start: true,
       });
       if (!result.ok) {
