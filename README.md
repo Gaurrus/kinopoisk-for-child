@@ -172,6 +172,10 @@ yarn pack:mac:zip
 При падении launchd перезапускает его (`KeepAlive`). Лог:
 `~/Library/Logs/kinopoisk-update-server.log`.
 
+Процесс называется **`Kinopoisk for child server`** (это копия Node в
+`~/Library/Application Support/Kinopoisk for child/server/`), поэтому в
+Activity Monitor видно понятное имя, а не просто `node`.
+
 Остановить и удалить автозапуск:
 
 ```bash

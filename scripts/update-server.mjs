@@ -4,6 +4,8 @@ import http from 'node:http';
 import os from 'node:os';
 import path from 'node:path';
 
+process.title = 'Kinopoisk for child server';
+
 const root = path.resolve(process.env.UPDATE_ROOT ?? 'dist-app');
 const port = Number.parseInt(process.env.UPDATE_PORT ?? '8080', 10);
 const pkg = JSON.parse(readFileSync('package.json', 'utf8'));
