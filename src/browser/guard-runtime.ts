@@ -24,7 +24,7 @@ const UI_ROOT_ID = 'kp-child-guard-ui';
 const COUNT_THRESHOLD_SEC = 5;
 const MIN_WEAK_DURATION_SEC = 60;
 const AUTO_CONTINUE_DELAYS_MS = [0, 800, 1600, 3000, 5000, 8000, 12000];
-const AUTO_CONTINUE_TEXT = 'продолжить просмотр';
+const AUTO_CONTINUE_TARGETS = ['продолжить просмотр', 'смотреть сериал'];
 const KINOPOISK_HOST_RE = /(^|\.)kinopoisk\.ru$/i;
 
 interface CurrentPlayback {
@@ -289,16 +289,30 @@ function injectUi(): void {
 
 function tryAutoContinue(): void {
   if (autoContinueDone || blocked) return;
-  const nodes = document.querySelectorAll<HTMLElement>(
-    'button, a, [role="button"], [data-testid*="continue" i]',
-  );
+
+  const nodes = document.querySelectorAll<HTMLElement>('button, a, [role="button"]');
+  const candidates: Array<{ node: HTMLElement; text: string }> = [];
+
   for (const node of Array.from(nodes)) {
-    if (node.offsetParent === null) continue;
-    const text = (node.textContent ?? '').replace(/\s+/g, ' ').trim().toLowerCase();
-    if (!text.includes(AUTO_CONTINUE_TEXT)) continue;
+    const rect = node.getBoundingClientRect();
+    if (rect.width <= 0 || rect.height <= 0) continue;
+
+    const text = [node.textContent, node.getAttribute('aria-label'), node.getAttribute('title')]
+      .filter(Boolean)
+      .join(' ')
+      .replace(/\s+/g, ' ')
+      .trim()
+      .toLowerCase();
+    if (text.length === 0 || text.length > 60) continue;
+    candidates.push({ node, text });
+  }
+
+  for (const target of AUTO_CONTINUE_TARGETS) {
+    const hit = candidates.find((candidate) => candidate.text === target);
+    if (!hit) continue;
     autoContinueDone = true;
     try {
-      node.click();
+      hit.node.click();
     } catch {
       /* ignore */
     }

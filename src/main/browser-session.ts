@@ -442,6 +442,21 @@ export class BrowserGuardSession {
     const expression = `(() => {
       try {
         if (document.fullscreenElement) return 'already';
+
+        const videos = Array.from(document.querySelectorAll('video')).filter((video) => {
+          const rect = video.getBoundingClientRect();
+          return (
+            rect.width > 0 &&
+            rect.height > 0 &&
+            Number.isFinite(video.duration) &&
+            video.duration >= 60
+          );
+        });
+        const video = videos.sort(
+          (a, b) => b.getBoundingClientRect().width - a.getBoundingClientRect().width,
+        )[0];
+        if (!video) return 'no-episode-video';
+
         const label = (el) => {
           const parts = [];
           try { parts.push(el.getAttribute('aria-label') || ''); } catch (e) {}
@@ -449,27 +464,31 @@ export class BrowserGuardSession {
           try { parts.push(typeof el.className === 'string' ? el.className : ''); } catch (e) {}
           return parts.join(' ').toLowerCase();
         };
-        const candidates = Array.from(
-          document.querySelectorAll(
-            'button,[role="button"],[class*="fullscreen" i],[data-testid*="fullscreen" i]',
-          ),
-        );
-        const button = candidates.find(
-          (el) =>
-            /fullscreen|full-screen|full_screen|полный экран|полноэкран|весь экран|развернуть/.test(
-              label(el),
-            ) && el.getBoundingClientRect().width > 0,
-        );
-        if (button) {
-          button.click();
-          return 'button';
-        }
-        const video = document.querySelector('video');
-        if (!video) return 'no-video:iframes=' + document.querySelectorAll('iframe').length;
+        const fullscreenLabel =
+          /fullscreen|full-screen|full_screen|полный экран|полноэкран|весь экран/;
+
         const container =
           video.closest('[data-testid*="player" i],[class*="player" i]') ||
           video.parentElement ||
           video;
+        const scopes = [container, container.parentElement].filter(Boolean);
+
+        for (const scope of scopes) {
+          const button = Array.from(
+            scope.querySelectorAll(
+              'button,[role="button"],[class*="fullscreen" i],[data-testid*="fullscreen" i]',
+            ),
+          ).find(
+            (el) =>
+              fullscreenLabel.test(label(el)) &&
+              el.getBoundingClientRect().width > 0,
+          );
+          if (button) {
+            button.click();
+            return 'button';
+          }
+        }
+
         const request = container.requestFullscreen || container.webkitRequestFullscreen;
         if (!request) return 'no-request';
         Promise.resolve(request.call(container)).catch(() => {
