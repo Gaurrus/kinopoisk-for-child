@@ -66,7 +66,7 @@ yarn install
 yarn dist:win
 ```
 
-Готовый установщик появится в `dist-app/kinopoisk-for-child-1.0.4-setup.exe`.
+Готовый установщик появится в `dist-app/kinopoisk-for-child-<version>-setup.exe`.
 VMP/EVS для основного режима **не нужны**.
 
 > Собирать Windows-установщик нужно на Windows: `electronDist` указывает на
