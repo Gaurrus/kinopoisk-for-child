@@ -130,15 +130,16 @@ yarn serve:updates
 Скрипт раздаёт `dist-app` на порту 8080, генерирует `version.json` и печатает
 адреса вида `http://192.168.1.10:8080/`.
 
-Чтобы клиенты использовали постоянное имя, задайте локальное имя Mac:
+Адрес сервера по имени — `http://<LocalHostName>.local:8080/`. Локальное имя
+Mac можно узнать так:
 
 ```bash
-sudo scutil --set LocalHostName kinopoisk-child
+scutil --get LocalHostName
 ```
 
-(или System Settings → General → Sharing → Local hostname). После этого адрес
-сервера — `http://kinopoisk-child.local:8080/`. В окне настроек приложения есть
-поле **«Сервер обновлений»** — укажите там этот адрес (на самом Mac можно
+Например, для `MacBook-Air-Igor` адрес будет
+`http://macbook-air-igor.local:8080/`. В окне настроек приложения есть поле
+**«Сервер обновлений»** — укажите там этот адрес (на самом Mac можно
 `http://127.0.0.1:8080/`).
 
 Windows 10+ резолвит `.local` через mDNS. Если в сети multicast закрыт,
