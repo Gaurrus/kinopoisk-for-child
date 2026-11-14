@@ -75,6 +75,29 @@ function sendFile(req, res, file) {
 const server = http.createServer((req, res) => {
   const pathname = decodeURIComponent(new URL(req.url ?? '/', 'http://localhost').pathname);
   console.log(`[updates] ${req.method} ${pathname}`);
+
+  if (pathname === '/latest.exe') {
+    if (!win) {
+      res.writeHead(404, { 'Content-Type': 'text/plain; charset=utf-8' });
+      res.end('Windows build not found');
+      return;
+    }
+    res.writeHead(302, { Location: `/${encodeURIComponent(win)}` });
+    res.end();
+    return;
+  }
+
+  if (pathname === '/latest-mac.zip') {
+    if (!mac) {
+      res.writeHead(404, { 'Content-Type': 'text/plain; charset=utf-8' });
+      res.end('macOS build not found');
+      return;
+    }
+    res.writeHead(302, { Location: `/${encodeURIComponent(mac)}` });
+    res.end();
+    return;
+  }
+
   const relative = pathname === '/' ? 'version.json' : pathname.replace(/^\/+/, '');
   const file = path.resolve(root, relative);
 

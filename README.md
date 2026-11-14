@@ -142,8 +142,14 @@ scutil --get LocalHostName
 умолчанию (поле **«Сервер обновлений»** можно изменить; на самом Mac работает и
 `http://127.0.0.1:8080/`).
 
-Windows 10+ резолвит `.local` через mDNS. Если в сети multicast закрыт,
-установите Bonjour или используйте IP-адрес Mac.
+Скачать вручную из браузера:
+
+- Windows: `http://macbook-air-igor.local:8080/latest.exe`
+- macOS: `http://macbook-air-igor.local:8080/latest-mac.zip`
+
+Ссылки `latest.*` всегда отдают текущую версию; прямые ссылки с номером версии
+тоже доступны (см. `version.json`). Windows 10+ резолвит `.local` через mDNS.
+Если в сети multicast закрыт, установите Bonjour или используйте IP-адрес Mac.
 
 При запуске приложение проверяет обновления:
 
