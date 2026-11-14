@@ -155,6 +155,7 @@ export class BrowserGuardSession {
     if (useCdp) {
       args.push(
         '--remote-debugging-port=0',
+        '--start-fullscreen',
         '--autoplay-policy=no-user-gesture-required',
         `--app=${this.options.startUrl}`,
         '--disable-background-mode',
