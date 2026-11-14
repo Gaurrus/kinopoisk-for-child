@@ -15,6 +15,7 @@ export interface GuardAttemptResult {
 export interface GuardTransport {
   attempt(key: string): Promise<GuardAttemptResult>;
   onSnapshot(callback: (snapshot: GuardSnapshot) => void): void;
+  onPlaybackStart?(key: string): void;
   openSettings(): void;
   quit(): void;
 }
@@ -195,6 +196,8 @@ function beginPlayback(video: HTMLVideoElement): void {
     url: location.href,
     duration,
   };
+
+  transport?.onPlaybackStart?.(key);
 }
 
 async function attempt(key: string): Promise<boolean> {

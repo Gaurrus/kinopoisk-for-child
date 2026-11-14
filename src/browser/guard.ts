@@ -55,6 +55,9 @@ startGuard({
     listeners.add(callback);
     send({ type: 'ready' });
   },
+  onPlaybackStart: (key) => {
+    send({ type: 'playbackStart', key });
+  },
   openSettings: () => {
     send({ type: 'openSettings' });
   },

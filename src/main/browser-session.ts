@@ -371,6 +371,11 @@ export class BrowserGuardSession {
       return;
     }
 
+    if (data.type === 'playbackStart') {
+      await this.enterFullscreen(client);
+      return;
+    }
+
     if (data.type === 'openSettings') {
       this.options.onOpenSettings();
       return;
@@ -379,6 +384,41 @@ export class BrowserGuardSession {
     if (data.type === 'quit') {
       await this.stop();
       this.options.onExit();
+    }
+  }
+
+  private async enterFullscreen(client: CDP.Client): Promise<void> {
+    const expression = `(() => {
+      try {
+        if (document.fullscreenElement) return true;
+        const button = document.querySelector(
+          '[aria-label*="весь экран" i],[aria-label*="fullscreen" i],[data-testid*="fullscreen" i]',
+        );
+        if (button && button.offsetParent !== null) {
+          button.click();
+          return true;
+        }
+        const video = document.querySelector('video');
+        if (!video) return false;
+        const container =
+          video.closest('[data-testid*="player" i],[class*="player" i]') || video;
+        const target = container || video;
+        const request = target.requestFullscreen || target.webkitRequestFullscreen;
+        if (!request) return false;
+        Promise.resolve(request.call(target)).catch(() => {
+          try {
+            video.requestFullscreen();
+          } catch (e) {}
+        });
+        return true;
+      } catch (e) {
+        return false;
+      }
+    })()`;
+    try {
+      await client.Runtime.evaluate({ expression, userGesture: true });
+    } catch {
+      /* page may be navigating */
     }
   }
 
