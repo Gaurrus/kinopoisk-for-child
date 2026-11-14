@@ -1,3 +1,4 @@
+import { execSync } from 'node:child_process';
 import { createReadStream, existsSync, readFileSync, readdirSync, statSync, writeFileSync } from 'node:fs';
 import http from 'node:http';
 import os from 'node:os';
@@ -94,12 +95,20 @@ function lanAddresses() {
   return result;
 }
 
-server.listen(port, '0.0.0.0', () => {
+server.listen(port, () => {
   console.log(`[updates] версия ${version}`);
   console.log(`[updates] каталог ${root}`);
   console.log(`[updates] локально http://127.0.0.1:${port}/`);
   for (const address of lanAddresses()) {
     console.log(`[updates] в сети  http://${address}:${port}/`);
+  }
+  try {
+    const localName = execSync('scutil --get LocalHostName', { encoding: 'utf8' }).trim();
+    if (localName) {
+      console.log(`[updates] по имени http://${localName.toLowerCase()}.local:${port}/`);
+    }
+  } catch {
+    /* not macOS */
   }
   console.log('[updates] укажите этот адрес в настройках приложения');
 });
