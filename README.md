@@ -161,6 +161,27 @@ yarn dist:mac
 yarn pack:mac:zip
 ```
 
+### Автозапуск сервера на macOS
+
+Сервер поставлен в LaunchAgent и стартует при входе пользователя:
+
+```
+~/Library/LaunchAgents/local.kinopoisk.update-server.plist
+```
+
+При падении launchd перезапускает его (`KeepAlive`). Лог:
+`~/Library/Logs/kinopoisk-update-server.log`.
+
+Остановить и удалить автозапуск:
+
+```bash
+launchctl bootout gui/$(id -u) ~/Library/LaunchAgents/local.kinopoisk.update-server.plist
+rm ~/Library/LaunchAgents/local.kinopoisk.update-server.plist
+```
+
+LaunchAgent запускается после входа в систему. Если сервер нужен до входа
+(до логина), потребуется LaunchDaemon в `/Library/LaunchDaemons` с правами root.
+
 Сервер и обновления работают по HTTP в локальной сети; используйте доверенную
 сеть. Сервер должен быть запущен, порт 8080 — доступен.
 

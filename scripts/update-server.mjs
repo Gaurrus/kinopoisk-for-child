@@ -1,4 +1,4 @@
-import { execSync } from 'node:child_process';
+import { execFileSync } from 'node:child_process';
 import { createReadStream, existsSync, readFileSync, readdirSync, statSync, writeFileSync } from 'node:fs';
 import http from 'node:http';
 import os from 'node:os';
@@ -103,7 +103,10 @@ server.listen(port, () => {
     console.log(`[updates] в сети  http://${address}:${port}/`);
   }
   try {
-    const localName = execSync('scutil --get LocalHostName', { encoding: 'utf8' }).trim();
+    const scutil = existsSync('/usr/sbin/scutil') ? '/usr/sbin/scutil' : 'scutil';
+    const localName = execFileSync(scutil, ['--get', 'LocalHostName'], {
+      encoding: 'utf8',
+    }).trim();
     if (localName) {
       console.log(`[updates] по имени http://${localName.toLowerCase()}.local:${port}/`);
     }
