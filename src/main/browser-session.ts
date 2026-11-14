@@ -155,14 +155,17 @@ export class BrowserGuardSession {
     if (useCdp) {
       args.push(
         '--remote-debugging-port=0',
-        '--start-fullscreen',
         '--autoplay-policy=no-user-gesture-required',
         `--app=${this.options.startUrl}`,
         '--disable-background-mode',
         '--disable-session-crashed-bubble',
         '--hide-crash-restore-bubble',
-        '--window-size=1280,800',
       );
+      if (process.platform === 'darwin') {
+        args.push('--start-maximized');
+      } else {
+        args.push('--start-fullscreen', '--window-size=1280,800');
+      }
     } else {
       args.push('--new-window', this.options.startUrl);
     }
@@ -318,6 +321,9 @@ export class BrowserGuardSession {
     client.on('Page.frameNavigated', (event) => {
       if (!event.frame.parentId) {
         void this.refreshAuth(client);
+        if (process.platform === 'darwin' && KINOPOISK_URL_RE.test(event.frame.url)) {
+          void this.maximizeWindow(client, target.id);
+        }
       }
     });
 
@@ -329,6 +335,9 @@ export class BrowserGuardSession {
         await this.sendSnapshot(client);
       } catch {
         /* page may be navigating */
+      }
+      if (process.platform === 'darwin') {
+        await this.maximizeWindow(client, target.id);
       }
     }
 
@@ -384,6 +393,18 @@ export class BrowserGuardSession {
     if (data.type === 'quit') {
       await this.stop();
       this.options.onExit();
+    }
+  }
+
+  private async maximizeWindow(client: CDP.Client, targetId: string): Promise<void> {
+    try {
+      const { windowId } = await client.Browser.getWindowForTarget({ targetId });
+      await client.Browser.setWindowBounds({
+        windowId,
+        bounds: { windowState: 'maximized' },
+      });
+    } catch {
+      /* window may already be closing */
     }
   }
 
