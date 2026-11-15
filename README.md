@@ -211,8 +211,6 @@ yarn serve:updates
 
 ## Публикация в GitHub
 
-Репозиторий: `Gaurrus/kinopoisk-for-child` (private).
-
 Репозиторий публичный: `https://github.com/Gaurrus/kinopoisk-for-child`.
 
 ```bash
