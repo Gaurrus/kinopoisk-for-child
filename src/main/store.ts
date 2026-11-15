@@ -10,10 +10,14 @@ export interface Settings {
   updateUrl: string;
 }
 
+const GITHUB_UPDATE_URL =
+  'https://github.com/Gaurrus/kinopoisk-for-child/releases/latest/download/';
+const LEGACY_UPDATE_URL = 'http://macbook-air-igor.local:8080/';
+
 const DEFAULTS: Settings = {
   episodeLimit: 2,
   startUrl: DEFAULT_START_URL,
-  updateUrl: 'http://macbook-air-igor.local:8080/',
+  updateUrl: GITHUB_UPDATE_URL,
 };
 
 const KINOPOISK_URL_RE = /^https:\/\/hd\.kinopoisk\.ru\//i;
@@ -36,15 +40,17 @@ export function loadSettings(dir: string): Settings {
   try {
     const raw = fs.readFileSync(settingsFile(dir), 'utf8');
     const parsed = JSON.parse(raw) as Partial<Settings>;
+    const rawUpdateUrl =
+      typeof parsed.updateUrl === 'string' ? parsed.updateUrl.trim() : '';
     return {
       episodeLimit: normalizeLimit(parsed.episodeLimit ?? DEFAULTS.episodeLimit),
       startUrl: isValidStartUrl(parsed.startUrl) ? parsed.startUrl.trim() : DEFAULTS.startUrl,
       updateUrl:
-        typeof parsed.updateUrl === 'string' &&
-        parsed.updateUrl.trim() !== '' &&
-        isValidUpdateUrl(parsed.updateUrl)
-          ? parsed.updateUrl.trim()
-          : DEFAULTS.updateUrl,
+        rawUpdateUrl === '' || rawUpdateUrl === LEGACY_UPDATE_URL
+          ? GITHUB_UPDATE_URL
+          : isValidUpdateUrl(rawUpdateUrl)
+            ? rawUpdateUrl
+            : GITHUB_UPDATE_URL,
     };
   } catch {
     return { ...DEFAULTS };

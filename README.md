@@ -120,9 +120,27 @@ py -3 -m castlabs_evs.vmp verify-pkg dist-app/win-unpacked
 `yarn install` заново распаковывает Electron и стирает подпись — после него
 `evs:sign:dev` нужно повторить.
 
-## Обновления по локальной сети
+## Обновления
 
-На Mac (сервер обновлений):
+Основной источник — **GitHub Releases** (репозиторий публичный):
+
+```
+https://github.com/Gaurrus/kinopoisk-for-child/releases/latest/download/
+```
+
+В каждый релиз загружаются Windows-установщик, `latest.yml`, `.blockmap`,
+macOS-zip и `version.json`. Приложение по умолчанию ходит в GitHub; старый
+локальный адрес автоматически заменяется на GitHub.
+
+Проверить релиз:
+
+```bash
+curl -sL https://github.com/Gaurrus/kinopoisk-for-child/releases/latest/download/version.json
+```
+
+### Локальный сервер (опционально)
+
+Можно оставить как резервный источник или для раздачи по LAN. На Mac:
 
 ```bash
 yarn serve:updates
@@ -168,30 +186,16 @@ yarn dist:mac
 yarn pack:mac:zip
 ```
 
-### Автозапуск сервера на macOS
+### Автозапуск сервера
 
-Сервер поставлен в LaunchAgent и стартует при входе пользователя:
-
-```
-~/Library/LaunchAgents/local.kinopoisk.update-server.plist
-```
-
-При падении launchd перезапускает его (`KeepAlive`). Лог:
-`~/Library/Logs/kinopoisk-update-server.log`.
-
-Процесс называется **`Kinopoisk for child server`** (это копия Node в
-`~/Library/Application Support/Kinopoisk for child/server/`), поэтому в
-Activity Monitor видно понятное имя, а не просто `node`.
-
-Остановить и удалить автозапуск:
+Автозапуск **не настроен**. Сервер запускается вручную:
 
 ```bash
-launchctl bootout gui/$(id -u) ~/Library/LaunchAgents/local.kinopoisk.update-server.plist
-rm ~/Library/LaunchAgents/local.kinopoisk.update-server.plist
+yarn serve:updates
 ```
 
-LaunchAgent запускается после входа в систему. Если сервер нужен до входа
-(до логина), потребуется LaunchDaemon в `/Library/LaunchDaemons` с правами root.
+Основной источник обновлений — GitHub Releases, поэтому локальный сервер нужен
+только для раздачи по LAN или как резерв.
 
 Сервер и обновления работают по HTTP в локальной сети; используйте доверенную
 сеть. Сервер должен быть запущен, порт 8080 — доступен.
@@ -209,11 +213,13 @@ LaunchAgent запускается после входа в систему. Ес
 
 Репозиторий: `Gaurrus/kinopoisk-for-child` (private).
 
+Репозиторий публичный: `https://github.com/Gaurrus/kinopoisk-for-child`.
+
 ```bash
 git init -b main
 git add .
 git commit -m "feat: kinopoisk for child desktop app"
-gh repo create Gaurrus/kinopoisk-for-child --private --source . --remote origin --push
+gh repo create Gaurrus/kinopoisk-for-child --public --source . --remote origin --push
 ```
 
 Если `gh` не авторизован: `gh auth login`.
