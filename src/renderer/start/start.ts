@@ -17,10 +17,18 @@
   const btnLogout = byId<HTMLButtonElement>('btn-logout');
   const version = byId<HTMLElement>('version');
   const seriesButtons = Array.from(
-    document.querySelectorAll<HTMLButtonElement>('[data-url]'),
+    document.querySelectorAll<HTMLButtonElement>('.series__button'),
   );
+  const seriesLinks = Array.from(
+    document.querySelectorAll<HTMLButtonElement>('.series__link'),
+  );
+  const seriesItems = seriesButtons.map((button) => ({
+    button,
+    url: button.dataset.url ?? '',
+  }));
 
   let state: KpSettingsState | null = null;
+  let selectedIndex = 0;
 
   function show(name: keyof typeof screens): void {
     for (const [key, element] of Object.entries(screens)) {
@@ -41,20 +49,24 @@
     formTitle.textContent =
       state.mode === 'start' ? 'Что смотрим?' : 'Настройки просмотра';
 
-    for (const button of seriesButtons) {
-      const isPrimary = button.classList.contains('series__button');
-      const isActive = (button.dataset.url ?? '') === state.startUrl;
-      button.classList.toggle('series__button_active', isPrimary && isActive);
-    }
-
+    renderSeries();
     setError(null);
     show('form');
+  }
+
+  function renderSeries(): void {
+    for (const [index, item] of seriesItems.entries()) {
+      item.button.classList.toggle('series__button_active', index === selectedIndex);
+    }
   }
 
   async function refresh(): Promise<void> {
     state = await window.kp.getState();
     version.textContent = `v${state.appVersion}`;
+    const savedIndex = seriesItems.findIndex((item) => item.url === state?.startUrl);
+    if (savedIndex >= 0) selectedIndex = savedIndex;
     render();
+    limitInput.focus();
   }
 
   async function startSeries(url: string, trigger: HTMLButtonElement): Promise<void> {
@@ -84,11 +96,59 @@
     }
   }
 
-  for (const button of seriesButtons) {
+  function selectByUrl(url: string): void {
+    const index = seriesItems.findIndex((item) => item.url === url);
+    if (index >= 0) {
+      selectedIndex = index;
+      renderSeries();
+    }
+  }
+
+  for (const button of [...seriesButtons, ...seriesLinks]) {
     button.addEventListener('click', () => {
+      selectByUrl(button.dataset.url ?? '');
       void startSeries(button.dataset.url ?? '', button);
     });
+    button.addEventListener('focus', () => {
+      selectByUrl(button.dataset.url ?? '');
+    });
   }
+
+  document.addEventListener('keydown', (event) => {
+    if (!state) return;
+    const active = document.activeElement;
+
+    if (active instanceof HTMLElement && active.id === 'btn-logout') return;
+
+    if (event.key === 'ArrowUp' || event.key === 'ArrowDown') {
+      event.preventDefault();
+      const parsed = Number.parseInt(limitInput.value, 10);
+      const base = Number.isFinite(parsed) ? parsed : state.episodeLimit;
+      const next = Math.min(99, Math.max(0, base + (event.key === 'ArrowUp' ? 1 : -1)));
+      limitInput.value = String(next);
+      setError(null);
+      return;
+    }
+
+    if (event.key === 'ArrowLeft' || event.key === 'ArrowRight') {
+      event.preventDefault();
+      const length = seriesItems.length;
+      if (length === 0) return;
+      selectedIndex =
+        (selectedIndex + (event.key === 'ArrowRight' ? 1 : -1) + length) % length;
+      renderSeries();
+      seriesItems[selectedIndex]?.button.focus();
+      setError(null);
+      return;
+    }
+
+    if (event.key === 'Enter') {
+      if (active instanceof HTMLElement && active.hasAttribute('data-url')) return;
+      event.preventDefault();
+      const item = seriesItems[selectedIndex];
+      if (item) void startSeries(item.url, item.button);
+    }
+  });
 
   btnLogout.addEventListener('click', async () => {
     const confirmed = window.confirm('Выйти из аккаунта Kinopoisk на этом компьютере?');
