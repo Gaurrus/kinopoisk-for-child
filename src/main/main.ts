@@ -99,6 +99,7 @@ function fallbackSnapshot() {
     used: 0,
     remaining: limit === 0 ? null : limit,
     allowed: [] as string[],
+    sessionId: 'no-session',
   };
 }
 

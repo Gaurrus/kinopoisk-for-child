@@ -10,6 +10,7 @@ export interface LimiterSnapshot {
   used: number;
   remaining: number | null;
   allowed: string[];
+  sessionId: string;
 }
 
 export interface SettingsState extends LimiterSnapshot {

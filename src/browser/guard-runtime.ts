@@ -5,6 +5,7 @@ export interface GuardSnapshot {
   used: number;
   remaining: number | null;
   allowed: string[];
+  sessionId?: string;
 }
 
 export interface GuardAttemptResult {
@@ -26,6 +27,9 @@ const MIN_WEAK_DURATION_SEC = 60;
 const AUTO_CONTINUE_DELAYS_MS = [0, 800, 1600, 3000, 5000, 8000, 12000];
 const AUTO_CONTINUE_TARGETS = ['продолжить просмотр', 'смотреть сериал'];
 const KINOPOISK_HOST_RE = /(^|\.)kinopoisk\.ru$/i;
+const SESSION_STARTED_KEY = 'kp-child-session-started-v1';
+const RESTART_WATCHDOG_MS = 5000;
+const RESTART_WATCHDOG_THRESHOLD_SEC = 20;
 
 interface CurrentPlayback {
   key: string;
@@ -61,6 +65,8 @@ let current: CurrentPlayback | null = null;
 let lastKey: string | null = null;
 let lastEnded = false;
 let autoContinueDone = false;
+let currentSessionId = '';
+let restartWatch: { video: HTMLVideoElement; until: number; tries: number } | null = null;
 const repeatCounters = new Map<string, number>();
 
 function isUnlimited(): boolean {
@@ -74,6 +80,9 @@ function remaining(): number | null {
 function applyState(snapshot: GuardSnapshot): void {
   if (typeof snapshot.limit === 'number') limit = snapshot.limit;
   if (typeof snapshot.used === 'number') used = snapshot.used;
+  if (typeof snapshot.sessionId === 'string' && snapshot.sessionId !== '') {
+    currentSessionId = snapshot.sessionId;
+  }
 
   if (Array.isArray(snapshot.allowed)) {
     allowedKeys.clear();
@@ -150,6 +159,72 @@ function resolveKey(video: HTMLVideoElement): ResolvedKey | null {
   return null;
 }
 
+export function shouldRestartFirstEpisode(
+  url: string,
+  currentTime: number,
+  duration: number,
+  alreadyStarted: boolean,
+): boolean {
+  if (alreadyStarted) return false;
+  if (strongEpisodeKey(url) === null) return false;
+  if (!Number.isFinite(duration) || duration < MIN_WEAK_DURATION_SEC) return false;
+  return Number.isFinite(currentTime) && currentTime > 1;
+}
+
+function sessionStarted(): boolean {
+  if (currentSessionId === '') return false;
+  try {
+    return sessionStorage.getItem(SESSION_STARTED_KEY) === currentSessionId;
+  } catch {
+    return false;
+  }
+}
+
+function markSessionStarted(): void {
+  try {
+    sessionStorage.setItem(SESSION_STARTED_KEY, currentSessionId || 'unknown');
+  } catch {
+    /* storage can be unavailable */
+  }
+}
+
+function restartFromBeginning(video: HTMLVideoElement): void {
+  if (!Number.isFinite(video.currentTime)) return;
+  try {
+    video.currentTime = 0;
+  } catch {
+    return;
+  }
+  restartWatch = { video, until: Date.now() + RESTART_WATCHDOG_MS, tries: 1 };
+  console.info('[guard] first episode restarted from the beginning', location.href);
+}
+
+function maybeRestartSessionStart(video: HTMLVideoElement, resolved: ResolvedKey): void {
+  if (sessionStarted() || !resolved.strong) return;
+  if (strongEpisodeKey(location.href) === null) return;
+  if (!Number.isFinite(video.duration) || video.duration < MIN_WEAK_DURATION_SEC) return;
+
+  markSessionStarted();
+  if (shouldRestartFirstEpisode(location.href, video.currentTime, video.duration, false)) {
+    restartFromBeginning(video);
+  }
+}
+
+function enforceRestart(video: HTMLVideoElement): void {
+  if (!restartWatch || restartWatch.video !== video) return;
+  if (Date.now() > restartWatch.until) {
+    restartWatch = null;
+    return;
+  }
+  if (video.currentTime <= RESTART_WATCHDOG_THRESHOLD_SEC || restartWatch.tries >= 3) return;
+  restartWatch.tries += 1;
+  try {
+    video.currentTime = 0;
+  } catch {
+    restartWatch = null;
+  }
+}
+
 function beginPlayback(video: HTMLVideoElement): void {
   if (blocked) {
     if (!video.paused) video.pause();
@@ -169,6 +244,8 @@ function beginPlayback(video: HTMLVideoElement): void {
     current = null;
     return;
   }
+
+  maybeRestartSessionStart(video, resolved);
 
   let key = resolved.key;
   if (!resolved.strong && lastEnded && lastKey === key) {
@@ -227,12 +304,25 @@ function onTimeUpdate(event: Event): void {
   const video = event.target;
   if (!(video instanceof HTMLVideoElement)) return;
 
+  enforceRestart(video);
+
   if (blocked) {
     if (!video.paused) video.pause();
     return;
   }
 
   if (!current || current.video !== video || current.reported) return;
+
+  if (!sessionStarted() && current.strong && strongEpisodeKey(location.href) !== null) {
+    const duration = Number.isFinite(video.duration) ? video.duration : 0;
+    if (duration >= MIN_WEAK_DURATION_SEC) {
+      markSessionStarted();
+      if (shouldRestartFirstEpisode(location.href, video.currentTime, duration, false)) {
+        restartFromBeginning(video);
+      }
+    }
+  }
+
   if (!Number.isFinite(video.currentTime)) return;
   if (video.currentTime < COUNT_THRESHOLD_SEC) return;
 

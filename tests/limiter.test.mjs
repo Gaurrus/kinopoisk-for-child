@@ -59,3 +59,13 @@ test('normalizeLimit clamps values', () => {
   assert.equal(normalizeLimit(500), 99);
   assert.equal(normalizeLimit('nope'), 0);
 });
+
+test('each session gets a unique id', () => {
+  const first = new EpisodeLimiter(1);
+  const second = new EpisodeLimiter(1);
+  assert.equal(first.snapshot().sessionId, first.snapshot().sessionId);
+  assert.notEqual(first.snapshot().sessionId, second.snapshot().sessionId);
+  const id = first.snapshot().sessionId;
+  first.reset(2);
+  assert.equal(first.snapshot().sessionId, id);
+});

@@ -11,10 +11,13 @@ export interface AttemptOutcome {
   alreadyCounted: boolean;
 }
 
+let sessionCounter = 0;
+
 export class EpisodeLimiter {
   private limit: number;
   private used = 0;
   private readonly allowed = new Set<string>();
+  private readonly sessionId = `${Date.now().toString(36)}-${++sessionCounter}`;
 
   constructor(limit: unknown) {
     this.limit = normalizeLimit(limit);
@@ -49,6 +52,7 @@ export class EpisodeLimiter {
       used: this.used,
       remaining: this.limit === 0 ? null : Math.max(0, this.limit - this.used),
       allowed: Array.from(this.allowed),
+      sessionId: this.sessionId,
     };
   }
 }
