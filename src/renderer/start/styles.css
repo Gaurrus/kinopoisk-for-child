@@ -195,23 +195,6 @@ body {
   background: rgba(255, 90, 31, 0.12);
 }
 
-.series__link {
-  padding: 0;
-  border: none;
-  background: none;
-  color: #5f6a80;
-  font: inherit;
-  font-size: 10px;
-  line-height: 1.35;
-  text-align: left;
-  word-break: break-all;
-  cursor: pointer;
-}
-
-.series__link:hover {
-  color: #8f9bb2;
-  text-decoration: underline;
-}
 
 .keys {
   margin: 0;

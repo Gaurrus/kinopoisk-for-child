@@ -19,9 +19,6 @@
   const seriesButtons = Array.from(
     document.querySelectorAll<HTMLButtonElement>('.series__button'),
   );
-  const seriesLinks = Array.from(
-    document.querySelectorAll<HTMLButtonElement>('.series__link'),
-  );
   const seriesItems = seriesButtons.map((button) => ({
     button,
     url: button.dataset.url ?? '',
@@ -104,7 +101,7 @@
     }
   }
 
-  for (const button of [...seriesButtons, ...seriesLinks]) {
+  for (const button of seriesButtons) {
     button.addEventListener('click', () => {
       selectByUrl(button.dataset.url ?? '');
       void startSeries(button.dataset.url ?? '', button);

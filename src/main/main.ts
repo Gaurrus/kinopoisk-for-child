@@ -144,7 +144,7 @@ function openSettingsWindow(mode: SettingsWindowMode): void {
 
   settingsWindow = new BrowserWindow({
     width: 560,
-    height: mode === 'start' ? 720 : 700,
+    height: mode === 'start' ? 680 : 660,
     resizable: false,
     maximizable: false,
     fullscreenable: false,
