@@ -16,6 +16,7 @@
   const formTitle = byId<HTMLElement>('form-title');
   const btnLogout = byId<HTMLButtonElement>('btn-logout');
   const version = byId<HTMLElement>('version');
+  const networkOverlay = byId<HTMLElement>('network-overlay');
   const seriesButtons = Array.from(
     document.querySelectorAll<HTMLButtonElement>('.series__button'),
   );
@@ -68,6 +69,10 @@
 
   async function startSeries(url: string, trigger: HTMLButtonElement): Promise<void> {
     if (!state) return;
+    if (!navigator.onLine) {
+      setError('Нет подключения к сети');
+      return;
+    }
     setError(null);
 
     const rawLimit = limitInput.value.trim();
@@ -157,6 +162,14 @@
       setError(result.error ?? 'Не удалось выйти из аккаунта');
     }
   });
+
+  function updateNetwork(): void {
+    networkOverlay.hidden = navigator.onLine;
+  }
+
+  window.addEventListener('online', updateNetwork);
+  window.addEventListener('offline', updateNetwork);
+  updateNetwork();
 
   void refresh().catch((error: unknown) => {
     console.error('[settings] failed to load state', error);

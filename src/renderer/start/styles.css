@@ -256,3 +256,49 @@ body {
   color: #4d566b;
   font-size: 11px;
 }
+
+.network-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  background: rgba(8, 10, 15, 0.92);
+  backdrop-filter: blur(10px);
+}
+
+.network-overlay[hidden] {
+  display: none;
+}
+
+.network-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  padding: 28px 34px;
+  border: 1px solid var(--border);
+  border-radius: 20px;
+  background: rgba(21, 26, 35, 0.92);
+  text-align: center;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.45);
+}
+
+.network-card__icon {
+  width: 54px;
+  height: 54px;
+  color: var(--accent);
+}
+
+.network-card__title {
+  font-size: 22px;
+  font-weight: 750;
+  letter-spacing: -0.01em;
+}
+
+.network-card__text {
+  color: var(--muted);
+  font-size: 13px;
+}

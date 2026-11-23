@@ -59,6 +59,7 @@ let host: HTMLDivElement | null = null;
 let shadow: ShadowRoot | null = null;
 let badge: HTMLDivElement | null = null;
 let badgeText: HTMLSpanElement | null = null;
+let networkOverlay: HTMLDivElement | null = null;
 
 let blocked = false;
 let current: CurrentPlayback | null = null;
@@ -225,7 +226,19 @@ function enforceRestart(video: HTMLVideoElement): void {
   }
 }
 
+function updateNetwork(): void {
+  if (!networkOverlay) return;
+  const offline = !navigator.onLine;
+  networkOverlay.hidden = !offline;
+  if (offline && current && !current.video.paused) current.video.pause();
+}
+
 function beginPlayback(video: HTMLVideoElement): void {
+  if (!navigator.onLine) {
+    if (!video.paused) video.pause();
+    return;
+  }
+
   if (blocked) {
     if (!video.paused) video.pause();
     return;
@@ -372,9 +385,11 @@ function injectUi(): void {
 
   badge = shadow.querySelector<HTMLDivElement>('.badge');
   badgeText = shadow.querySelector<HTMLSpanElement>('.badge__text');
+  networkOverlay = shadow.querySelector<HTMLDivElement>('.network');
 
   document.documentElement.appendChild(host);
   renderBadge();
+  updateNetwork();
 }
 
 function tryAutoContinue(): void {
@@ -442,6 +457,9 @@ export function startGuard(nextTransport: GuardTransport): void {
   document.addEventListener('timeupdate', onTimeUpdate, true);
   document.addEventListener('ended', onEnded, true);
 
+  window.addEventListener('online', updateNetwork);
+  window.addEventListener('offline', updateNetwork);
+
   document.addEventListener('keydown', (event) => {
     if (event.ctrlKey && event.shiftKey && event.key.toLowerCase() === 'l') {
       event.preventDefault();
@@ -458,6 +476,7 @@ export function startGuard(nextTransport: GuardTransport): void {
 
   if (document.documentElement) {
     safeInjectUi();
+    updateNetwork();
   } else {
     document.addEventListener('DOMContentLoaded', safeInjectUi, { once: true });
   }
@@ -469,6 +488,19 @@ const UI_MARKUP = `
   <div class="badge" role="status">
     <span class="badge__dot"></span>
     <span class="badge__text">...</span>
+  </div>
+  <div class="network" role="alert" aria-live="assertive" hidden>
+    <div class="network__card">
+      <svg class="network__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" aria-hidden="true">
+        <path d="M3 3l18 18" />
+        <path d="M5 12.5a10.5 10.5 0 0 1 4.2-2.4" />
+        <path d="M2.5 8.8a15.5 15.5 0 0 1 5-3.1" />
+        <path d="M9.5 16.3a4.5 4.5 0 0 1 5 0" />
+        <circle cx="12" cy="20" r="1" fill="currentColor" stroke="none" />
+      </svg>
+      <div class="network__title">Нет сети</div>
+      <div class="network__text">Проверьте подключение к Wi-Fi</div>
+    </div>
   </div>
 `;
 
@@ -508,5 +540,46 @@ const UI_STYLES = `
   }
   .badge.danger .badge__dot {
     background: #ff5c5c;
+  }
+  .network {
+    position: fixed;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 24px;
+    background: rgba(8, 10, 15, 0.94);
+    pointer-events: auto;
+    z-index: 3;
+  }
+  .network[hidden] {
+    display: none;
+  }
+  .network__card {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 10px;
+    padding: 28px 34px;
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    border-radius: 20px;
+    background: rgba(21, 26, 35, 0.94);
+    color: #f4f6fb;
+    text-align: center;
+    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+  }
+  .network__icon {
+    width: 54px;
+    height: 54px;
+    color: #ff5a1f;
+  }
+  .network__title {
+    font-size: 22px;
+    font-weight: 750;
+    letter-spacing: -0.01em;
+  }
+  .network__text {
+    color: #929bb0;
+    font-size: 13px;
   }
 `;
